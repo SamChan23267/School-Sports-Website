@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'upcoming_fixture_widget.dart';
 
 void main() {
   runApp(const MyApp());
@@ -188,15 +189,7 @@ class LandingPage extends StatelessWidget {
                                 .surface
                                 .withOpacity(0.5),
                           ),
-                          child: const Center(
-                            child: Text(
-                              'More features coming soon!',
-                              style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w400,
-                                  color: Colors.grey),
-                            ),
-                          ),
+                          child: const UpcomingFixtureWidget(),
                         ),
                       ),
                     ),

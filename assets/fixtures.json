@@ -1,0 +1,29 @@
+[
+  {
+    "sport": "Hockey (School Sport)",
+    "competition": "Hockey Auckland",
+    "premier": true,
+    "date_time": "09/05/2025 7:30 PM",
+    "venue": "Westlake Boys High School: Court 1",
+    "home_org": "Westlake Boys High School",
+    "away_org": "Sacred Heart College (Auckland)"
+  },
+  {
+    "sport": "Hockey (School Sport)",
+    "competition": "Hockey Auckland",
+    "premier": true,
+    "date_time": "12/05/2025 7:30 PM",
+    "venue": "Auckland Grammar: Court 1",
+    "home_org": "Auckland Grammar School",
+    "away_org": "Sacred Heart College (Auckland)"
+  },
+  {
+    "sport": "Hockey (School Sport)",
+    "competition": "Hockey Auckland",
+    "premier": false,
+    "date_time": "16/05/2025 7:45 PM",
+    "venue": "Dilworth School: Court 1",
+    "home_org": "Dilworth School",
+    "away_org": "Sacred Heart College (Auckland)"
+  }
+]
