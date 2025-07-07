@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'api_service.dart';
 import 'models.dart';
+import 'fixture_detail_screen.dart'; // Import the new detail screen
 
 // --- Filter Model and Enums ---
 enum PremierStatus { all, premierOnly }
@@ -43,16 +44,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   void initState() {
     super.initState();
     _fixturesFuture = _apiService.getFixtures();
-  }
-
-  String _formatDateTime(String dateTimeString) {
-    if (dateTimeString.isEmpty) return 'Date TBC';
-    try {
-      final dateTime = DateTime.parse(dateTimeString);
-      return DateFormat('E, d MMM, h:mm a').format(dateTime);
-    } catch (e) {
-      return dateTimeString;
-    }
   }
 
   void _showFilterDialog(List<Fixture> allFixtures) {
@@ -171,7 +162,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                         ),
                       ],
                     )
-                    // --- END NEW ---
+                    // --- END NEW ---                  
                   ],
                 ),
               ),
@@ -308,23 +299,34 @@ class _CompactFixtureCard extends StatelessWidget {
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(fixture.sport, style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 4),
-                  Text('$ourTeam vs $opponentSchool', style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
-                ],
-              ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FixtureDetailScreen(fixture: fixture),
             ),
-            const SizedBox(width: 16),
-            Text(_formatCompactDateTime(fixture.dateTime), style: Theme.of(context).textTheme.bodyLarge),
-          ],
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(fixture.sport, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 4),
+                    Text('$ourTeam vs $opponentSchool', style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(_formatCompactDateTime(fixture.dateTime), style: Theme.of(context).textTheme.bodyLarge),
+            ],
+          ),
         ),
       ),
     );
@@ -351,39 +353,50 @@ class _DetailedFixtureCard extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(fixture.sport, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(fixture.competition, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 12),
-            Row(children: [
-              Icon(Icons.calendar_today, size: 16, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(_formatDateTime(fixture.dateTime)),
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(child: Text(fixture.venue)),
-            ]),
-            const Divider(height: 24),
-            _TeamVsWidget(fixture: fixture),
-            if (fixture.premier)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Chip(
-                  label: const Text('Premier'),
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                  side: BorderSide.none,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FixtureDetailScreen(fixture: fixture),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(fixture.sport, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(fixture.competition, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              Row(children: [
+                Icon(Icons.calendar_today, size: 16, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(_formatDateTime(fixture.dateTime)),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(fixture.venue)),
+              ]),
+              const Divider(height: 24),
+              _TeamVsWidget(fixture: fixture),
+              if (fixture.premier)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Chip(
+                    label: const Text('Premier'),
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                    side: BorderSide.none,
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
