@@ -37,6 +37,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   late Future<List<Fixture>> _fixturesFuture;
   final ApiService _apiService = ApiService();
   FixtureFilters _filters = FixtureFilters();
+  bool _isCompactView = false;
 
   @override
   void initState() {
@@ -48,7 +49,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
     if (dateTimeString.isEmpty) return 'Date TBC';
     try {
       final dateTime = DateTime.parse(dateTimeString);
-      return DateFormat('E, d MMM yyyy, h:mm a').format(dateTime);
+      return DateFormat('E, d MMM, h:mm a').format(dateTime);
     } catch (e) {
       return dateTimeString;
     }
@@ -60,11 +61,9 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
     showDialog(
       context: context,
       builder: (context) {
-        // Use a StatefulBuilder to manage the state within the dialog
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
             
-            // Get teams for the selected sport
             final sacredHeartTeams = allFixtures
                 .where((f) => _filters.sport == null || f.sport == _filters.sport)
                 .map((f) => f.homeSchool == "Sacred Heart College (Auckland)" ? f.homeTeam : f.awayTeam)
@@ -103,7 +102,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                       onChanged: (String? newValue) {
                         setDialogState(() {
                           _filters.sport = newValue;
-                          _filters.team = null; // Reset team when sport changes
+                          _filters.team = null;
                         });
                       },
                       items: [
@@ -128,23 +127,51 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                     const SizedBox(height: 16),
                     const Text('Date Range'),
                     const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.calendar_today),
-                      label: Text(_filters.dateRange == null 
-                          ? 'Select Date Range' 
-                          : '${DateFormat.yMd().format(_filters.dateRange!.start)} - ${DateFormat.yMd().format(_filters.dateRange!.end)}'),
-                      onPressed: () async {
-                        final picked = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                          initialDateRange: _filters.dateRange,
-                        );
-                        if (picked != null) {
-                          setDialogState(() => _filters.dateRange = picked);
-                        }
-                      },
+                    // --- NEW: Separate Date Pickers ---
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            child: Text(_filters.dateRange?.start == null ? 'Start Date' : DateFormat.yMd().format(_filters.dateRange!.start)),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _filters.dateRange?.start ?? DateTime.now(),
+                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  final end = _filters.dateRange?.end ?? picked.add(const Duration(days: 30));
+                                  _filters.dateRange = DateTimeRange(start: picked, end: end);
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            child: Text(_filters.dateRange?.end == null ? 'End Date' : DateFormat.yMd().format(_filters.dateRange!.end)),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _filters.dateRange?.end ?? DateTime.now(),
+                                firstDate: _filters.dateRange?.start ?? DateTime.now().subtract(const Duration(days: 365)),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  final start = _filters.dateRange?.start ?? picked.subtract(const Duration(days: 30));
+                                  _filters.dateRange = DateTimeRange(start: start, end: picked);
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     )
+                    // --- END NEW ---
                   ],
                 ),
               ),
@@ -158,7 +185,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 ),
                 TextButton(
                   onPressed: () {
-                    setState(() {}); // Trigger main build to re-filter
+                    setState(() {});
                     Navigator.of(context).pop();
                   },
                   child: const Text('Apply'),
@@ -183,7 +210,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               IconButton(
                 icon: const Icon(Icons.filter_list),
                 onPressed: () {
-                  // Pass the full list of fixtures to the dialog
                   _fixturesFuture.then((allFixtures) {
                     if (allFixtures.isNotEmpty) {
                       _showFilterDialog(allFixtures);
@@ -191,6 +217,16 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                   });
                 },
                 tooltip: 'Filter Fixtures',
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
+                onPressed: () {
+                  setState(() {
+                    _isCompactView = !_isCompactView;
+                  });
+                },
+                tooltip: _isCompactView ? 'Show Detailed View' : 'Show Compact View',
               ),
             ],
           ),
@@ -211,18 +247,15 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 return const Center(child: Text('No upcoming fixtures found for Sacred Heart College.'));
               }
 
-              // Apply filters
               final filteredFixtures = allFixtures.where((f) {
                 final premierMatch = _filters.premierStatus == PremierStatus.all || f.premier;
                 final sportMatch = _filters.sport == null || f.sport == _filters.sport;
                 final teamMatch = _filters.team == null || f.homeTeam == _filters.team || f.awayTeam == _filters.team;
-                
                 final locationMatch = _filters.locationStatus == LocationStatus.all ||
                                       (_filters.locationStatus == LocationStatus.home && f.venue.toLowerCase().contains("sacred heart")) ||
                                       (_filters.locationStatus == LocationStatus.away && !f.venue.toLowerCase().contains("sacred heart"));
-
                 final dateMatch = _filters.dateRange == null || 
-                                  (DateTime.parse(f.dateTime).isAfter(_filters.dateRange!.start) && 
+                                  (DateTime.parse(f.dateTime).isAfter(_filters.dateRange!.start.subtract(const Duration(days:1))) && 
                                    DateTime.parse(f.dateTime).isBefore(_filters.dateRange!.end.add(const Duration(days: 1))));
 
                 return premierMatch && sportMatch && teamMatch && locationMatch && dateMatch;
@@ -238,51 +271,121 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 itemCount: filteredFixtures.length,
                 itemBuilder: (context, index) {
                   final fixture = filteredFixtures[index];
-                  return Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(fixture.sport, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Text(fixture.competition, style: Theme.of(context).textTheme.bodyMedium),
-                          const SizedBox(height: 12),
-                          Row(children: [
-                            Icon(Icons.calendar_today, size: 18, color: Theme.of(context).colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Text(_formatDateTime(fixture.dateTime)),
-                          ]),
-                          const SizedBox(height: 8),
-                          Row(children: [
-                            Icon(Icons.location_on, size: 18, color: Theme.of(context).colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(fixture.venue)),
-                          ]),
-                          const SizedBox(height: 16),
-                          _TeamVsWidget(fixture: fixture),
-                          if (fixture.premier)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12.0),
-                              child: Chip(
-                                label: const Text('Premier'),
-                                backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                                side: BorderSide.none,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
+                  return _isCompactView
+                      ? _CompactFixtureCard(fixture: fixture)
+                      : _DetailedFixtureCard(fixture: fixture);
                 },
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CompactFixtureCard extends StatelessWidget {
+  final Fixture fixture;
+  const _CompactFixtureCard({required this.fixture});
+
+  String _formatCompactDateTime(String dateTimeString) {
+    if (dateTimeString.isEmpty) return 'Date TBC';
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return DateFormat('E, d MMM, h:mm a').format(dateTime);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const String ourSchool = "Sacred Heart College (Auckland)";
+    final ourTeam = fixture.homeSchool == ourSchool ? fixture.homeTeam : fixture.awayTeam;
+    final opponentSchool = fixture.homeSchool == ourSchool ? fixture.awaySchool : fixture.homeSchool;
+
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(fixture.sport, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Text('$ourTeam vs $opponentSchool', style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Text(_formatCompactDateTime(fixture.dateTime), style: Theme.of(context).textTheme.bodyLarge),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailedFixtureCard extends StatelessWidget {
+  final Fixture fixture;
+  const _DetailedFixtureCard({required this.fixture});
+
+  String _formatDateTime(String dateTimeString) {
+    if (dateTimeString.isEmpty) return 'Date TBC';
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return DateFormat('E, d MMM yy, h:mm a').format(dateTime);
+    } catch (e) {
+      return dateTimeString;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(fixture.sport, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(fixture.competition, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            Row(children: [
+              Icon(Icons.calendar_today, size: 16, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(_formatDateTime(fixture.dateTime)),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(fixture.venue)),
+            ]),
+            const Divider(height: 24),
+            _TeamVsWidget(fixture: fixture),
+            if (fixture.premier)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Chip(
+                  label: const Text('Premier'),
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                  side: BorderSide.none,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -327,6 +430,7 @@ class _TeamVsWidget extends StatelessWidget {
 
 extension StringExtension on String {
     String capitalize() {
+      if (isEmpty) return this;
       return "${this[0].toUpperCase()}${substring(1)}";
     }
 }

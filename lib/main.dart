@@ -70,7 +70,6 @@ class LandingPage extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          // Top Navigation Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
             decoration: BoxDecoration(
@@ -145,7 +144,6 @@ class LandingPage extends StatelessWidget {
               ],
             ),
           ),
-          // Body content
           Expanded(
             child: Container(
               width: double.infinity,

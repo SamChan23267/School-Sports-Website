@@ -12,6 +12,8 @@ class Fixture {
   final String? homeOrgLogo;
   final String? awayOrgLogo;
   final bool premier;
+  final double? lat;
+  final double? lng;
 
   Fixture({
     required this.sport,
@@ -25,6 +27,8 @@ class Fixture {
     this.homeOrgLogo,
     this.awayOrgLogo,
     required this.premier,
+    this.lat,
+    this.lng,
   });
 
   factory Fixture.fromJson(Map<String, dynamic> json, Map<String, dynamic> metadata) {
@@ -54,7 +58,6 @@ class Fixture {
                       homeTeamName.toLowerCase().contains('premier') ||
                       awayTeamName.toLowerCase().contains('premier');
 
-    // Construct full logo URLs
     String? homeLogo = json['HomeOrgLogo'];
     if (homeLogo != null && homeLogo.isNotEmpty) {
       homeLogo = "https://sportsgroundproduction.blob.core.windows.net/cms/${homeLogo.split('?')[0]}";
@@ -76,6 +79,8 @@ class Fixture {
       homeOrgLogo: homeLogo,
       awayOrgLogo: awayLogo,
       premier: isPremier,
+      lat: json['LocationLat'],
+      lng: json['LocationLng'],
     );
   }
 }
