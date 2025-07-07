@@ -79,7 +79,16 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                   .toList();
               
               if (filteredFixtures.isEmpty && !_showAllFixtures) {
-                 return const Center(child: Text('No upcoming premier fixtures found.'));
+                 return const Center(
+                   child: Padding(
+                     padding: EdgeInsets.all(24.0),
+                     child: Text(
+                      'No upcoming premier fixtures found.\nTry toggling "Show All Fixtures" to see all games.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(height: 1.5),
+                     ),
+                   ),
+                 );
               }
 
               filteredFixtures.sort((a, b) {

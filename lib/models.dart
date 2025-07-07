@@ -24,7 +24,7 @@ class Fixture {
   });
 
   factory Fixture.fromJson(Map<String, dynamic> json, Map<String, dynamic> metadata) {
-    // --- FIX: Look up the Sport Name using SportId from metadata ---
+    // Look up the Sport Name using SportId from the metadata
     final int sportId = json['SportId'] ?? 0;
     final sports = metadata['Sports'] as List<dynamic>;
     final sportMeta = sports.firstWhere(
@@ -33,27 +33,32 @@ class Fixture {
     );
     final String sportName = sportMeta['Name'];
 
-    // --- FIX: Construct the full, detailed competition name ---
+    // Construct the full, detailed competition name
     final competitionName = json['CompetitionName'] as String? ?? '';
     final gradeName = json['GradeName'] as String? ?? '';
     final sectionName = json['SectionName'] as String? ?? '';
     final roundName = json['RoundName'] as String? ?? '';
     
-    // Combine the parts, filtering out any empty ones.
     final competitionParts = [competitionName, gradeName, sectionName, roundName]
-        .where((part) => part.isNotEmpty)
+        .where((part) => part.isNotEmpty && part != "N/A")
         .toList();
     final fullCompetitionName = competitionParts.join(' - ');
 
-    final isPremier = competitionName.toLowerCase().contains('premier');
+    final homeTeamName = json['HomeTeamName'] as String? ?? '';
+    final awayTeamName = json['AwayTeamName'] as String? ?? '';
+
+    final isPremier = competitionName.toLowerCase().contains('premier') ||
+                      gradeName.toLowerCase().contains('premier') ||
+                      homeTeamName.toLowerCase().contains('premier') ||
+                      awayTeamName.toLowerCase().contains('premier');
 
     return Fixture(
       sport: sportName,
       competition: fullCompetitionName,
-      dateTime: json['From'] ?? '', // FIX: The API uses 'From' for the date
+      dateTime: json['From'] ?? '', // The API uses 'From' for the date
       venue: json['VenueName'] ?? 'TBC',
-      homeTeam: json['HomeTeamName'] ?? 'TBC',
-      awayTeam: json['AwayTeamName'] ?? 'TBC',
+      homeTeam: homeTeamName,
+      awayTeam: awayTeamName,
       homeSchool: json['HomeOrgName'] ?? '',
       awaySchool: json['AwayOrgName'] ?? '',
       premier: isPremier,
