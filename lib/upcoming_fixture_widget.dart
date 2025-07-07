@@ -35,19 +35,39 @@ class UpcomingFixtureWidget extends StatefulWidget {
 }
 
 class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
-  late Future<List<Fixture>> _fixturesFuture;
+  // --- MODIFIED ---
+  // This is no longer `late final` as we will be re-assigning it.
+  Future<List<Fixture>>? _fixturesFuture;
   final ApiService _apiService = ApiService();
   FixtureFilters _filters = FixtureFilters();
   bool _isCompactView = false;
+  
+  // --- MODIFIED ---
+  // We now have a dedicated list to hold all fixtures fetched from the API
+  // before client-side filtering is applied.
+  List<Fixture> _allFixtures = [];
+
 
   @override
   void initState() {
     super.initState();
-    _fixturesFuture = _apiService.getFixtures();
+    // --- MODIFIED ---
+    // Initial fetch when the widget loads.
+    _fetchFixtures();
   }
 
-  void _showFilterDialog(List<Fixture> allFixtures) {
-    final sports = allFixtures.map((f) => f.sport).toSet().toList()..sort();
+  // --- NEW METHOD ---
+  // This method triggers the API call and updates the state.
+  void _fetchFixtures() {
+    setState(() {
+      // Pass the dateRange from our filters to the API service.
+      _fixturesFuture = _apiService.getFixtures(dateRange: _filters.dateRange);
+    });
+  }
+
+  void _showFilterDialog() {
+    // We use the cached list of all fixtures to populate the filter dialog dropdowns
+    final sports = _allFixtures.map((f) => f.sport).toSet().toList()..sort();
     
     showDialog(
       context: context,
@@ -55,7 +75,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
             
-            final sacredHeartTeams = allFixtures
+            final sacredHeartTeams = _allFixtures
                 .where((f) => _filters.sport == null || f.sport == _filters.sport)
                 .map((f) => f.homeSchool == "Sacred Heart College (Auckland)" ? f.homeTeam : f.awayTeam)
                 .toSet().toList()..sort();
@@ -118,7 +138,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                     const SizedBox(height: 16),
                     const Text('Date Range'),
                     const SizedBox(height: 8),
-                    // --- NEW: Separate Date Pickers ---
                     Row(
                       children: [
                         Expanded(
@@ -161,22 +180,26 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                           ),
                         ),
                       ],
-                    )
-                    // --- END NEW ---                  
+                    )               
                   ],
                 ),
               ),
               actions: [
                 TextButton(
                   onPressed: () {
+                    // --- MODIFIED ---
+                    // Reset the filters object, then re-fetch with the default date range.
                     setState(() => _filters = FixtureFilters());
+                    _fetchFixtures();
                     Navigator.of(context).pop();
                   },
                   child: const Text('Reset'),
                 ),
                 TextButton(
                   onPressed: () {
-                    setState(() {});
+                    // --- MODIFIED ---
+                    // This is the key change. Re-fetch data from the API with the new filters.
+                    _fetchFixtures();
                     Navigator.of(context).pop();
                   },
                   child: const Text('Apply'),
@@ -201,11 +224,10 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               IconButton(
                 icon: const Icon(Icons.filter_list),
                 onPressed: () {
-                  _fixturesFuture.then((allFixtures) {
-                    if (allFixtures.isNotEmpty) {
-                      _showFilterDialog(allFixtures);
-                    }
-                  });
+                  // Only show the dialog if we have fixture data to populate it.
+                  if (_allFixtures.isNotEmpty) {
+                    _showFilterDialog();
+                  }
                 },
                 tooltip: 'Filter Fixtures',
               ),
@@ -233,23 +255,25 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Failed to load fixtures.\nError: ${snapshot.error}', textAlign: TextAlign.center)));
               }
               
-              final allFixtures = snapshot.data ?? [];
-              if (allFixtures.isEmpty) {
-                return const Center(child: Text('No upcoming fixtures found for Sacred Heart College.'));
+              // --- MODIFIED ---
+              // We update our cached list of all fixtures with the new data from the API.
+              _allFixtures = snapshot.data ?? [];
+              if (_allFixtures.isEmpty) {
+                return const Center(child: Text('No upcoming fixtures found for the selected criteria.'));
               }
 
-              final filteredFixtures = allFixtures.where((f) {
+              // --- MODIFIED ---
+              // The client-side filtering now only handles non-date filters.
+              final filteredFixtures = _allFixtures.where((f) {
                 final premierMatch = _filters.premierStatus == PremierStatus.all || f.premier;
                 final sportMatch = _filters.sport == null || f.sport == _filters.sport;
                 final teamMatch = _filters.team == null || f.homeTeam == _filters.team || f.awayTeam == _filters.team;
                 final locationMatch = _filters.locationStatus == LocationStatus.all ||
                                       (_filters.locationStatus == LocationStatus.home && f.venue.toLowerCase().contains("sacred heart")) ||
                                       (_filters.locationStatus == LocationStatus.away && !f.venue.toLowerCase().contains("sacred heart"));
-                final dateMatch = _filters.dateRange == null || 
-                                  (DateTime.parse(f.dateTime).isAfter(_filters.dateRange!.start.subtract(const Duration(days:1))) && 
-                                   DateTime.parse(f.dateTime).isBefore(_filters.dateRange!.end.add(const Duration(days: 1))));
-
-                return premierMatch && sportMatch && teamMatch && locationMatch && dateMatch;
+                
+                // The dateMatch check is no longer needed here as the API handles it.
+                return premierMatch && sportMatch && teamMatch && locationMatch;
               }).toList();
               
               if (filteredFixtures.isEmpty) {

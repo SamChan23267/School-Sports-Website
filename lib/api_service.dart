@@ -1,5 +1,6 @@
 // lib/api_service.dart
 
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'models.dart';
@@ -53,15 +54,19 @@ class ApiService {
       ..sort((a, b) => a.name.compareTo(b.name));
   }
 
-  Future<List<Fixture>> getFixtures() async {
+  // --- MODIFIED ---
+  // The getFixtures method now accepts an optional dateRange parameter.
+  Future<List<Fixture>> getFixtures({DateTimeRange? dateRange}) async {
     final metadata = await _getCompetitionMetadata();
     
     final List<int> allCompIds = (metadata['Competitions'] as List).map<int>((c) => c['Id']).toList();
     final allGradeIds = (metadata['GradesPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((g) => g['Id'] as int).toSet().toList();
     final allOrgIds = (metadata['OrgsPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((o) => o['Id'] as int).toSet().toList();
 
-    final fromDate = DateTime.now().toIso8601String().substring(0, 10);
-    final toDate = DateTime.now().add(const Duration(days: 20)).toIso8601String().substring(0, 10);
+    // --- MODIFIED ---
+    // If dateRange is provided, use it. Otherwise, fall back to the default of the next 20 days.
+    final fromDate = (dateRange?.start ?? DateTime.now()).toIso8601String().substring(0, 10);
+    final toDate = (dateRange?.end ?? DateTime.now().add(const Duration(days: 20))).toIso8601String().substring(0, 10);
 
     final payload = {
       "CompIds": allCompIds, "OrgIds": allOrgIds, "GradeIds": allGradeIds,
