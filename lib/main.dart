@@ -1,5 +1,9 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'upcoming_fixture_widget.dart';
+import 'api_service.dart';
+import 'models.dart';
 
 void main() {
   runApp(const MyApp());
@@ -83,7 +87,6 @@ class LandingPage extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Title
                 Row(
                   children: [
                     Icon(Icons.sports_soccer,
@@ -99,7 +102,6 @@ class LandingPage extends StatelessWidget {
                     ),
                   ],
                 ),
-                // Nav items
                 Row(
                   children: [
                     TextButton(
@@ -128,7 +130,6 @@ class LandingPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    // Dark/light mode toggle
                     IconButton(
                       tooltip: "Toggle dark mode",
                       icon: Icon(
@@ -152,8 +153,8 @@ class LandingPage extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1200),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Left: Sports list (card style)
                     Flexible(
                       flex: 2,
                       child: Padding(
@@ -163,14 +164,13 @@ class LandingPage extends StatelessWidget {
                           elevation: 3,
                           borderRadius: BorderRadius.circular(18),
                           color: Theme.of(context).colorScheme.surface,
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
+                          child: const Padding(
+                            padding: EdgeInsets.all(24),
                             child: SportsListColumn(),
                           ),
                         ),
                       ),
                     ),
-                    // Right: Future content (empty for now, leave space)
                     Flexible(
                       flex: 3,
                       child: Padding(
@@ -204,13 +204,25 @@ class LandingPage extends StatelessWidget {
   }
 }
 
-// Sports list column widget
-class SportsListColumn extends StatelessWidget {
+class SportsListColumn extends StatefulWidget {
+  const SportsListColumn({super.key});
+
+  @override
+  State<SportsListColumn> createState() => _SportsListColumnState();
+}
+
+class _SportsListColumnState extends State<SportsListColumn> {
+  late Future<List<Sport>> _sportsFuture;
+  final ApiService _apiService = ApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    _sportsFuture = _apiService.getSports();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sortedSports = List<Map<String, dynamic>>.from(mockSports)
-      ..sort((a, b) => a['name'].compareTo(b['name']));
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -223,43 +235,54 @@ class SportsListColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        ...sortedSports.map((sport) {
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            elevation: 0,
-            color: Theme.of(context)
-                .colorScheme
-                .secondaryContainer
-                .withOpacity(0.8),
-            child: ListTile(
-              leading: Text(
-                sport['icon'] ?? '',
-                style: const TextStyle(fontSize: 32),
-              ),
-              title: Text(
-                sport['name'],
-                style: const TextStyle(fontSize: 18),
-              ),
-              onTap: () {
-                // TODO: Navigate to Teams List Page
-              },
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-          );
-        }),
+        Expanded(
+          child: FutureBuilder<List<Sport>>(
+            future: _sportsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(child: Text('No sports found.'));
+              }
+
+              final sports = snapshot.data!;
+              return ListView.builder(
+                itemCount: sports.length,
+                itemBuilder: (context, index) {
+                  final sport = sports[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    elevation: 0,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .secondaryContainer
+                        .withOpacity(0.8),
+                    child: ListTile(
+                      leading: Text(
+                        sport.icon,
+                        style: const TextStyle(fontSize: 32),
+                      ),
+                      title: Text(
+                        sport.name,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                      onTap: () {
+                        // TODO: Navigate to Teams List Page for sport.id
+                      },
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
       ],
     );
   }
 }
-
-// Mock data for sports
-const List<Map<String, dynamic>> mockSports = [
-  {'name': 'Football', 'icon': '⚽'},
-  {'name': 'Basketball', 'icon': '🏀'},
-  {'name': 'Tennis', 'icon': '🎾'},
-  {'name': 'Cricket', 'icon': '🏏'},
-  {'name': 'Baseball', 'icon': '⚾'},
-  {'name': 'Swimming', 'icon': '🏊‍♂️'},
-  {'name': 'Running', 'icon': '🏃‍♂️'},
-];

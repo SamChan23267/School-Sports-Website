@@ -1,5 +1,9 @@
+// lib/upcoming_fixture_widget.dart
+
 import 'package:flutter/material.dart';
-import 'fixture_loader.dart';
+import 'package:intl/intl.dart';
+import 'api_service.dart';
+import 'models.dart';
 
 class UpcomingFixtureWidget extends StatefulWidget {
   const UpcomingFixtureWidget({super.key});
@@ -9,80 +13,91 @@ class UpcomingFixtureWidget extends StatefulWidget {
 }
 
 class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
-  bool _includeNonPremier = false;
+  bool _showAllFixtures = false; 
   late Future<List<Fixture>> _fixturesFuture;
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
     super.initState();
-    _fixturesFuture = FixtureLoader.loadFixtures();
+    _fixturesFuture = _apiService.getFixtures();
+  }
+
+  String _formatDateTime(String dateTimeString) {
+    if (dateTimeString.isEmpty) return 'Date TBC';
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return DateFormat('E, d MMM yyyy, h:mm a').format(dateTime);
+    } catch (e) {
+      return dateTimeString;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Fixture>>(
-      future: _fixturesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return const Center(child: Text('Failed to load fixtures.'));
-        }
-        final fixtures = snapshot.data ?? [];
-        final filtered = fixtures.where((f) => _includeNonPremier || f.premier).toList();
-        if (filtered.isEmpty) {
-          return const Center(child: Text('No upcoming fixtures.'));
-        }
-        
-        // Sort by date (assuming date_time is in dd/MM/yyyy h:mm a)
-        filtered.sort((a, b) {
-          DateTime parse(String s) {
-            try {
-              return DateTime.parse(
-                s.replaceAllMapped(
-                  RegExp(r'(\d{2})/(\d{2})/(\d{4}) (\d{1,2}):(\d{2}) ([AP]M)'),
-                  (m) {
-                    final day = m[1]!;
-                    final month = m[2]!;
-                    final year = m[3]!;
-                    var hour = int.parse(m[4]!);
-                    final minute = m[5]!;
-                    final ampm = m[6]!;
-                    if (ampm == 'PM' && hour != 12) hour += 12;
-                    if (ampm == 'AM' && hour == 12) hour = 0;
-                    return '$year-$month-$day $hour:$minute:00';
-                  },
-                ),
-              );
-            } catch (_) {
-              return DateTime.now();
-            }
-          }
-          return parse(a.dateTime).compareTo(parse(b.dateTime));
-        });
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('Show All Fixtures', style: Theme.of(context).textTheme.bodyMedium),
+              Switch(
+                value: _showAllFixtures,
+                onChanged: (val) => setState(() => _showAllFixtures = val),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: FutureBuilder<List<Fixture>>(
+            future: _fixturesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Failed to load fixtures.\nError: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+              
+              final allFixtures = snapshot.data ?? [];
+              if (allFixtures.isEmpty) {
+                return const Center(child: Text('No upcoming fixtures found for Sacred Heart College.'));
+              }
 
-        return Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text('Include non-premier teams', style: Theme.of(context).textTheme.bodyMedium),
-                Switch(
-                  value: _includeNonPremier,
-                  onChanged: (val) => setState(() => _includeNonPremier = val),
-                ),
-              ],
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: filtered.length,
+              final filteredFixtures = allFixtures
+                  .where((f) => _showAllFixtures || f.premier)
+                  .toList();
+              
+              if (filteredFixtures.isEmpty && !_showAllFixtures) {
+                 return const Center(child: Text('No upcoming premier fixtures found.'));
+              }
+
+              filteredFixtures.sort((a, b) {
+                try {
+                  return DateTime.parse(a.dateTime).compareTo(DateTime.parse(b.dateTime));
+                } catch (_) {
+                  return 0;
+                }
+              });
+
+              return ListView.builder(
+                itemCount: filteredFixtures.length,
                 itemBuilder: (context, index) {
-                  final fixture = filtered[index];
+                  final fixture = filteredFixtures[index];
                   return Card(
                     elevation: 2,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                     child: Padding(
                       padding: const EdgeInsets.all(20.0),
                       child: Column(
@@ -97,33 +112,34 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                             fixture.competition,
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Row(
                             children: [
                               Icon(Icons.calendar_today, size: 18, color: Theme.of(context).colorScheme.primary),
-                              const SizedBox(width: 6),
-                              Text(fixture.dateTime),
+                              const SizedBox(width: 8),
+                              Text(_formatDateTime(fixture.dateTime)),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Row(
                             children: [
                               Icon(Icons.location_on, size: 18, color: Theme.of(context).colorScheme.primary),
-                              const SizedBox(width: 6),
-                              Text(fixture.venue),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(fixture.venue)),
                             ],
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            '${fixture.homeOrg} vs ${fixture.awayOrg}',
-                            style: Theme.of(context).textTheme.titleMedium,
+                            '${fixture.homeSchool}: ${fixture.homeTeam}\nvs\n${fixture.awaySchool}: ${fixture.awayTeam}',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.5),
                           ),
                           if (fixture.premier)
                             Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
+                              padding: const EdgeInsets.only(top: 12.0),
                               child: Chip(
                                 label: const Text('Premier'),
                                 backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                                side: BorderSide.none,
                               ),
                             ),
                         ],
@@ -131,11 +147,11 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                     ),
                   );
                 },
-              ),
-            ),
-          ],
-        );
-      },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
