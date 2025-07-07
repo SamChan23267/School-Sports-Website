@@ -78,7 +78,6 @@ class ApiService {
       final Map<String, dynamic> decodedData = json.decode(response.body);
       final List<dynamic> fixtureData = decodedData['Fixtures'] as List<dynamic>? ?? [];
       
-      // --- FILTER LINE: Change this string to filter for a different school ---
       const String schoolToFilter = "Sacred Heart College (Auckland)";
 
       return fixtureData

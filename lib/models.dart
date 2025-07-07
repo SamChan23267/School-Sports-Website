@@ -9,6 +9,8 @@ class Fixture {
   final String awayTeam;
   final String homeSchool;
   final String awaySchool;
+  final String? homeOrgLogo;
+  final String? awayOrgLogo;
   final bool premier;
 
   Fixture({
@@ -20,11 +22,12 @@ class Fixture {
     required this.awayTeam,
     required this.homeSchool,
     required this.awaySchool,
+    this.homeOrgLogo,
+    this.awayOrgLogo,
     required this.premier,
   });
 
   factory Fixture.fromJson(Map<String, dynamic> json, Map<String, dynamic> metadata) {
-    // Look up the Sport Name using SportId from the metadata
     final int sportId = json['SportId'] ?? 0;
     final sports = metadata['Sports'] as List<dynamic>;
     final sportMeta = sports.firstWhere(
@@ -33,7 +36,6 @@ class Fixture {
     );
     final String sportName = sportMeta['Name'];
 
-    // Construct the full, detailed competition name
     final competitionName = json['CompetitionName'] as String? ?? '';
     final gradeName = json['GradeName'] as String? ?? '';
     final sectionName = json['SectionName'] as String? ?? '';
@@ -52,15 +54,27 @@ class Fixture {
                       homeTeamName.toLowerCase().contains('premier') ||
                       awayTeamName.toLowerCase().contains('premier');
 
+    // Construct full logo URLs
+    String? homeLogo = json['HomeOrgLogo'];
+    if (homeLogo != null && homeLogo.isNotEmpty) {
+      homeLogo = "https://sportsgroundproduction.blob.core.windows.net/cms/${homeLogo.split('?')[0]}";
+    }
+    String? awayLogo = json['AwayOrgLogo'];
+    if (awayLogo != null && awayLogo.isNotEmpty) {
+      awayLogo = "https://sportsgroundproduction.blob.core.windows.net/cms/${awayLogo.split('?')[0]}";
+    }
+
     return Fixture(
       sport: sportName,
       competition: fullCompetitionName,
-      dateTime: json['From'] ?? '', // The API uses 'From' for the date
+      dateTime: json['From'] ?? '',
       venue: json['VenueName'] ?? 'TBC',
       homeTeam: homeTeamName,
       awayTeam: awayTeamName,
       homeSchool: json['HomeOrgName'] ?? '',
       awaySchool: json['AwayOrgName'] ?? '',
+      homeOrgLogo: homeLogo,
+      awayOrgLogo: awayLogo,
       premier: isPremier,
     );
   }
