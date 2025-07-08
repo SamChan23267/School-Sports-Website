@@ -58,6 +58,16 @@ class FixtureDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _TeamVsWidget(fixture: fixture),
+            const SizedBox(height: 16),
+            // --- NEW: Premier Chip ---
+            if (fixture.premier)
+              Chip(
+                label: const Text('Premier'),
+                backgroundColor:
+                    Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                side: BorderSide.none,
+              ),
+            // --- END NEW ---
             const SizedBox(height: 24),
             _buildInfoCard(context),
             const SizedBox(height: 24),
@@ -102,6 +112,20 @@ class FixtureDetailScreen extends StatelessWidget {
                     iconSize: 40,
                     textStyle: Theme.of(context).textTheme.titleLarge,
                   ),
+                  const SizedBox(height: 16),
+                  // --- NEW: Premier Chip ---
+                  if (fixture.premier)
+                    Chip(
+                      label: const Text('Premier'),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer
+                          .withOpacity(0.4),
+                      side: BorderSide.none,
+                      labelStyle: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  // --- END NEW ---
                   const SizedBox(height: 32),
                   _buildInfoCard(context, isWide: true),
                 ],
