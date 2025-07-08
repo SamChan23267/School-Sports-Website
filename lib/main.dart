@@ -216,7 +216,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
   @override
   void initState() {
     super.initState();
-    _sportsFuture = _apiService.getSports();
+    // --- MODIFIED ---
+    // The FutureBuilder now calls the new method to get only the sports
+    // relevant to Sacred Heart College.
+    _sportsFuture = _apiService.getSportsForSacredHeart();
   }
 
   @override

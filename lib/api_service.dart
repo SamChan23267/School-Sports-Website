@@ -54,6 +54,32 @@ class ApiService {
       ..sort((a, b) => a.name.compareTo(b.name));
   }
 
+  // --- NEW METHOD ---
+  // This method filters the sports list to only include those relevant to Sacred Heart.
+  Future<List<Sport>> getSportsForSacredHeart() async {
+    // First, get all fixtures for the school.
+    final List<Fixture> fixtures = await getFixtures();
+
+    // From the fixtures, create a unique set of sport names.
+    final Set<String> sacredHeartSportNames = fixtures.map((f) => f.sport).toSet();
+
+    // Get the master list of all available sports from the metadata.
+    final metadata = await _getCompetitionMetadata();
+    final List<dynamic> allSportsData = metadata['Sports'] ?? [];
+
+    // Filter the master list, keeping only the sports that are in our set of names.
+    final filteredSportsData = allSportsData
+        .where((s) => sacredHeartSportNames.contains(s['Name']))
+        .toList();
+
+    // Finally, convert the filtered data to Sport objects and sort them alphabetically.
+    return filteredSportsData
+        .map((s) => Sport.fromJson(s, _sportIcons[s['Name']] ?? _sportIcons['Default']!))
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+
   // --- MODIFIED ---
   // The getFixtures method now accepts an optional dateRange parameter.
   Future<List<Fixture>> getFixtures({DateTimeRange? dateRange}) async {
