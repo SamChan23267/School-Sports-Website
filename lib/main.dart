@@ -213,9 +213,15 @@ class _SportsListColumnState extends State<SportsListColumn> {
   final ApiService _apiService = ApiService();
   
   // --- MODIFIED ---
-  // State to manage the view
+  // State to manage the view hierarchy
   String? _selectedSport;
+  String? _selectedTeam;
   Future<List<String>>? _teamsFuture;
+
+  // --- NEW ---
+  // State for the team detail view
+  int _selectedTabIndex = 0;
+  final PageController _pageController = PageController();
 
   void _onSportSelected(String sportName) {
     setState(() {
@@ -224,11 +230,30 @@ class _SportsListColumnState extends State<SportsListColumn> {
     });
   }
 
+  void _onTeamSelected(String teamName) {
+    setState(() {
+      _selectedTeam = teamName;
+    });
+  }
+
+  void _onBackToTeams() {
+    setState(() {
+      _selectedTeam = null;
+    });
+  }
+
   void _onBackToSports() {
     setState(() {
       _selectedSport = null;
+      _selectedTeam = null;
       _teamsFuture = null;
     });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -236,48 +261,84 @@ class _SportsListColumnState extends State<SportsListColumn> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // --- MODIFIED ---
-        // Header now changes based on the view
-        if (_selectedSport == null)
-          Text(
-            "Sports",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          )
-        else
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _onBackToSports,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _selectedSport!,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+        _buildHeader(),
         const SizedBox(height: 20),
         Expanded(
-          // --- MODIFIED ---
-          // Conditionally show either the Sports list or the Teams list
-          child: _selectedSport == null
-              ? _buildSportsList()
-              : _buildTeamsList(),
+          child: _buildContent(),
         ),
       ],
     );
+  }
+
+  // --- MODIFIED ---
+  // Header logic is now more complex to handle three levels of navigation
+  Widget _buildHeader() {
+    if (_selectedSport == null) {
+      return Text(
+        "Sports",
+        style: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    } else if (_selectedTeam == null) {
+      return Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _onBackToSports,
+            tooltip: "Back to Sports",
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _selectedSport!,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _onBackToTeams,
+            tooltip: "Back to Teams",
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _selectedTeam!,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+  }
+
+  // --- MODIFIED ---
+  // Content logic now switches between three different views
+  Widget _buildContent() {
+    if (_selectedSport == null) {
+      return _buildSportsList();
+    } else if (_selectedTeam == null) {
+      return _buildTeamsList();
+    } else {
+      return _buildTeamDetails();
+    }
   }
 
   Widget _buildSportsList() {
@@ -315,7 +376,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
                   sport.name,
                   style: const TextStyle(fontSize: 18),
                 ),
-                onTap: () => _onSportSelected(sport.name), // --- MODIFIED ---
+                onTap: () => _onSportSelected(sport.name),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -354,15 +415,91 @@ class _SportsListColumnState extends State<SportsListColumn> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () {
-                  // TODO: Filter the main fixture list by this team name
-                },
+                onPressed: () => _onTeamSelected(teamName),
                 child: Text(teamName, textAlign: TextAlign.center),
               ),
             );
           },
         );
       },
+    );
+  }
+
+  // --- NEW WIDGET ---
+  // This builds the team detail view with toggleable tabs
+  Widget _buildTeamDetails() {
+    return Column(
+      children: [
+        ToggleButtons(
+          isSelected: [_selectedTabIndex == 0, _selectedTabIndex == 1],
+          onPressed: (index) {
+            setState(() {
+              _selectedTabIndex = index;
+              _pageController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            });
+          },
+          borderRadius: BorderRadius.circular(8),
+          children: const [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text('Fixtures & Results'),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text('Standings'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _selectedTabIndex = index;
+              });
+            },
+            children: [
+              // --- Placeholder Content ---
+              _buildPlaceholderContent("Fixtures & Results"),
+              _buildPlaceholderContent("Standings Table(s)"),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- NEW WIDGET ---
+  // Placeholder for future content
+  Widget _buildPlaceholderContent(String title) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.construction, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              "$title Content",
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Coming soon!",
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
