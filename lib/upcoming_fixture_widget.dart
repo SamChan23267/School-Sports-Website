@@ -270,7 +270,9 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               }
 
               final filteredFixtures = _allFixtures.where((f) {
-                final premierMatch = _filters.premierStatus == PremierStatus.all || f.premier;
+                // --- MODIFIED ---
+                // If a specific team is selected, the premier status filter is ignored.
+                final premierMatch = _filters.team != null || _filters.premierStatus == PremierStatus.all || f.premier;
                 final sportMatch = _filters.sport == null || f.sport == _filters.sport;
                 final teamMatch = _filters.team == null || f.homeTeam == _filters.team || f.awayTeam == _filters.team;
                 final locationMatch = _filters.locationStatus == LocationStatus.all ||
