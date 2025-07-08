@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'models.dart';
 
 class FixtureDetailScreen extends StatelessWidget {
@@ -22,6 +23,15 @@ class FixtureDetailScreen extends StatelessWidget {
       return dateTimeString;
     }
   }
+
+  // --- NEW: Function to launch maps ---
+  Future<void> _launchMapsUrl(double lat, double lng) async {
+    final Uri url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    if (!await launchUrl(url)) {
+      throw Exception('Could not launch $url');
+    }
+  }
+  // --- END NEW ---
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +69,6 @@ class FixtureDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _TeamVsWidget(fixture: fixture),
             const SizedBox(height: 16),
-            // --- NEW: Premier Chip ---
             if (fixture.premier)
               Chip(
                 label: const Text('Premier'),
@@ -67,7 +76,6 @@ class FixtureDetailScreen extends StatelessWidget {
                     Theme.of(context).colorScheme.primary.withOpacity(0.15),
                 side: BorderSide.none,
               ),
-            // --- END NEW ---
             const SizedBox(height: 24),
             _buildInfoCard(context),
             const SizedBox(height: 24),
@@ -77,6 +85,21 @@ class FixtureDetailScreen extends StatelessWidget {
               height: 300,
               child: _buildMap(hasLocation),
             ),
+            const SizedBox(height: 16),
+            // --- NEW: Get Directions Button ---
+            if (hasLocation)
+              Center(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.directions),
+                  label: const Text('Get Directions'),
+                  onPressed: () => _launchMapsUrl(fixture.lat!, fixture.lng!),
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            // --- END NEW ---
           ],
         ),
       ),
@@ -106,14 +129,12 @@ class FixtureDetailScreen extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 32),
-                  // Use larger text and icons for the team display
                   _TeamVsWidget(
                     fixture: fixture,
                     iconSize: 40,
                     textStyle: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
-                  // --- NEW: Premier Chip ---
                   if (fixture.premier)
                     Chip(
                       label: const Text('Premier'),
@@ -125,7 +146,6 @@ class FixtureDetailScreen extends StatelessWidget {
                       side: BorderSide.none,
                       labelStyle: Theme.of(context).textTheme.bodyLarge,
                     ),
-                  // --- END NEW ---
                   const SizedBox(height: 32),
                   _buildInfoCard(context, isWide: true),
                 ],
@@ -141,10 +161,25 @@ class FixtureDetailScreen extends StatelessWidget {
               children: [
                 Text("Location Map", style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 16),
-                // Expanded makes the map fill the remaining vertical space
                 Expanded(
                   child: _buildMap(hasLocation),
                 ),
+                const SizedBox(height: 16),
+                // --- NEW: Get Directions Button ---
+                if (hasLocation)
+                  Center(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.directions),
+                      label: const Text('Get Directions'),
+                      onPressed: () => _launchMapsUrl(fixture.lat!, fixture.lng!),
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      ),
+                    ),
+                  ),
+                // --- END NEW ---
               ],
             ),
           ),
