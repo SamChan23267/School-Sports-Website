@@ -249,12 +249,15 @@ class _SportsListColumnState extends State<SportsListColumn> {
     setState(() {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
-      _teamFixturesFuture!.then((fixtures) {
+      
+      _standingsFuture = _teamFixturesFuture!.then((fixtures) {
         if (fixtures.isNotEmpty) {
-          final gradeId = fixtures.first.gradeId;
-          setState(() {
-            _standingsFuture = _apiService.getStandings(gradeId);
-          });
+          final firstFixture = fixtures.first;
+          final competitionId = firstFixture.competitionId;
+          final gradeId = firstFixture.gradeId;
+          return _apiService.getStandings(competitionId, gradeId);
+        } else {
+          return <StandingsTable>[];
         }
       });
     });
@@ -528,7 +531,15 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading standings: ${snapshot.error}'));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Could not load standings data.\nPlease check the network connection and try again.\n\nError: ${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(child: Text('No standings available.'));
@@ -559,20 +570,34 @@ class _SportsListColumnState extends State<SportsListColumn> {
                         headingRowHeight: 40,
                         dataRowMinHeight: 35,
                         dataRowMaxHeight: 40,
+                        // --- MODIFIED ---
+                        // Added new columns to the standings table.
                         columns: const [
                           DataColumn(label: Text('Team')),
                           DataColumn(label: Text('P'), numeric: true),
                           DataColumn(label: Text('W'), numeric: true),
                           DataColumn(label: Text('L'), numeric: true),
                           DataColumn(label: Text('D'), numeric: true),
+                          DataColumn(label: Text('B'), numeric: true),
+                          DataColumn(label: Text('BP'), numeric: true),
+                          DataColumn(label: Text('PF'), numeric: true),
+                          DataColumn(label: Text('PA'), numeric: true),
+                          DataColumn(label: Text('GD'), numeric: true),
                           DataColumn(label: Text('Pts'), numeric: true),
                         ],
+                        // --- MODIFIED ---
+                        // Added new cells for the new data points.
                         rows: table.standings.map((s) => DataRow(cells: [
                           DataCell(Text(s.teamName)), 
                           DataCell(Text(s.played.toString())),
                           DataCell(Text(s.win.toString())),
                           DataCell(Text(s.loss.toString())),
                           DataCell(Text(s.draw.toString())),
+                          DataCell(Text(s.byes.toString())),
+                          DataCell(Text(s.bonus.toString())),
+                          DataCell(Text(s.pointsFor.toString())),
+                          DataCell(Text(s.pointsAgainst.toString())),
+                          DataCell(Text(s.differential.toString())),
                           DataCell(Text(s.total.toString())),
                         ])).toList(),
                       ),
@@ -671,8 +696,6 @@ class _FixtureResultCard extends StatelessWidget {
             ),
             
             const SizedBox(height: 8),
-            // --- MODIFIED ---
-            // The location is now always displayed.
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
