@@ -37,7 +37,9 @@ class UpcomingFixtureWidget extends StatefulWidget {
 class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   Future<List<Fixture>>? _fixturesFuture;
   final ApiService _apiService = ApiService();
-  FixtureFilters _filters = FixtureFilters();
+  // --- MODIFIED ---
+  // Filters are now initialized in initState to set a dynamic default date.
+  late FixtureFilters _filters;
   bool _isCompactView = false;
   
   List<Fixture> _allFixtures = [];
@@ -46,6 +48,14 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   @override
   void initState() {
     super.initState();
+    // --- MODIFIED ---
+    // Set the default date range to today -> next 7 days.
+    _filters = FixtureFilters(
+      dateRange: DateTimeRange(
+        start: DateTime.now(),
+        end: DateTime.now().add(const Duration(days: 7)),
+      ),
+    );
     _fetchFixtures();
   }
 
@@ -136,13 +146,19 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.start ?? DateTime.now(),
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                // --- MODIFIED ---
+                                // Prevents selecting a date before today.
+                                firstDate: DateTime.now(),
                                 lastDate: DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
-                                  final end = _filters.dateRange?.end ?? picked.add(const Duration(days: 30));
-                                  _filters.dateRange = DateTimeRange(start: picked, end: end);
+                                  final end = _filters.dateRange?.end ?? picked.add(const Duration(days: 7));
+                                  // Ensure end date is not before the new start date
+                                  _filters.dateRange = DateTimeRange(
+                                    start: picked, 
+                                    end: picked.isAfter(end) ? picked : end
+                                  );
                                 });
                               }
                             },
@@ -156,12 +172,14 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.end ?? DateTime.now(),
-                                firstDate: _filters.dateRange?.start ?? DateTime.now().subtract(const Duration(days: 365)),
+                                // --- MODIFIED ---
+                                // End date cannot be before the selected start date.
+                                firstDate: _filters.dateRange?.start ?? DateTime.now(),
                                 lastDate: DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
-                                  final start = _filters.dateRange?.start ?? picked.subtract(const Duration(days: 30));
+                                  final start = _filters.dateRange?.start ?? picked.subtract(const Duration(days: 7));
                                   _filters.dateRange = DateTimeRange(start: start, end: picked);
                                 });
                               }
@@ -176,7 +194,14 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    setState(() => _filters = FixtureFilters());
+                    // --- MODIFIED ---
+                    // Resets to the new default date range.
+                    setState(() => _filters = FixtureFilters(
+                      dateRange: DateTimeRange(
+                        start: DateTime.now(),
+                        end: DateTime.now().add(const Duration(days: 7)),
+                      ),
+                    ));
                     _fetchFixtures();
                     Navigator.of(context).pop();
                   },
@@ -447,9 +472,6 @@ class _DetailedFixtureCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // --- MODIFIED ---
-              // Wrapped the location info in a Row and used Flexible for the text
-              // to prevent overflow and keep the icon and text together.
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
