@@ -71,7 +71,6 @@ class ApiService {
       ..sort((a, b) => a.name.compareTo(b.name));
   }
 
-  // --- NEW METHOD ---
   Future<List<String>> getTeamsForSport(String sportName) async {
     const String schoolName = "Sacred Heart College (Auckland)";
     final List<Fixture> fixtures = await getFixtures();
@@ -79,9 +78,9 @@ class ApiService {
     final teams = fixtures
         .where((f) => f.sport == sportName)
         .map((f) => f.homeSchool == schoolName ? f.homeTeam : f.awayTeam)
-        .toSet() // Use a Set to get unique team names
+        .toSet() 
         .toList()
-      ..sort(); // Sort the list alphabetically
+      ..sort(); 
 
     return teams;
   }
@@ -97,8 +96,8 @@ class ApiService {
     final allGradeIds = (metadata['GradesPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((g) => g['Id'] as int).toSet().toList();
     final allOrgIds = (metadata['OrgsPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((o) => o['Id'] as int).toSet().toList();
 
-    final fromDate = (dateRange?.start ?? DateTime.now()).toIso8601String().substring(0, 10);
-    final toDate = (dateRange?.end ?? DateTime.now().add(const Duration(days: 20))).toIso8601String().substring(0, 10);
+    final fromDate = (dateRange?.start ?? DateTime.now().subtract(const Duration(days: 30))).toIso8601String().substring(0, 10);
+    final toDate = (dateRange?.end ?? DateTime.now().add(const Duration(days: 30))).toIso8601String().substring(0, 10);
 
     final payload = {
       "CompIds": allCompIds, "OrgIds": allOrgIds, "GradeIds": allGradeIds,
@@ -132,5 +131,63 @@ class ApiService {
     } else {
       throw Exception('Failed to load fixtures');
     }
+  }
+
+  // --- NEW METHOD ---
+  Future<List<Fixture>> getFixturesForTeam(String teamName) async {
+    final allFixtures = await getFixtures(
+      dateRange: DateTimeRange(
+        start: DateTime.now().subtract(const Duration(days: 90)),
+        end: DateTime.now().add(const Duration(days: 90)),
+      )
+    );
+    return allFixtures.where((f) => f.homeTeam == teamName || f.awayTeam == teamName).toList();
+  }
+
+  // --- NEW METHOD ---
+  Future<List<StandingsTable>> getStandings(int gradeId) async {
+    // This is a mock implementation based on the provided JSON.
+    // In a real app, you would make an API call like:
+    // final response = await http.get(Uri.parse('.../standings/$gradeId'));
+    // For now, we'll simulate it.
+    
+    // This simulates finding the relevant competition and phase IDs.
+    // In a real app, this logic would be more robust.
+    final metadata = await _getCompetitionMetadata();
+    final grade = (metadata['GradesPerComp'] as Map<String, dynamic>)
+        .values
+        .expand((e) => e as List)
+        .firstWhere((g) => g['Id'] == gradeId, orElse: () => null);
+
+    if (grade == null) {
+      return []; // Grade not found
+    }
+
+    // Mocking the API response based on standings_data.json
+    // This is a simplified example. A real implementation would need to fetch
+    // the correct data based on competition and phase.
+    const String standingsJson = '''
+    [
+      {
+        "GradeId": 712052,
+        "GradeName": "Premier League",
+        "SectionId": 180607,
+        "SectionName": "Premier League",
+        "Standings": [
+          {"Played": 10, "Win": 9, "Loss": 1, "Draw": 0, "Total": 27, "TeamName": "Sacred Heart College (Auckland) : 1st XI"},
+          {"Played": 10, "Win": 8, "Loss": 2, "Draw": 0, "Total": 24, "TeamName": "Auckland Grammar School : AGS 1st XI"},
+          {"Played": 10, "Win": 7, "Loss": 3, "Draw": 0, "Total": 21, "TeamName": "Westlake Boys High School : 1st XI"},
+          {"Played": 10, "Win": 6, "Loss": 4, "Draw": 0, "Total": 18, "TeamName": "Saint Kentigern College : 1st XI"},
+          {"Played": 10, "Win": 5, "Loss": 5, "Draw": 0, "Total": 15, "TeamName": "St Peter's College (Epsom) : 1st XI"},
+          {"Played": 10, "Win": 4, "Loss": 6, "Draw": 0, "Total": 12, "TeamName": "Mt Albert Grammar School : MAGS 1st XI"},
+          {"Played": 10, "Win": 3, "Loss": 7, "Draw": 0, "Total": 9, "TeamName": "Macleans College : 1st XI"},
+          {"Played": 10, "Win": 0, "Loss": 10, "Draw": 0, "Total": 0, "TeamName": "Selwyn College : 1st XI"}
+        ]
+      }
+    ]
+    ''';
+
+    final List<dynamic> decodedData = json.decode(standingsJson);
+    return decodedData.map((data) => StandingsTable.fromJson(data)).toList();
   }
 }

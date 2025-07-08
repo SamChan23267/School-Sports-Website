@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'upcoming_fixture_widget.dart';
 import 'api_service.dart';
 import 'models.dart';
@@ -212,14 +213,12 @@ class SportsListColumn extends StatefulWidget {
 class _SportsListColumnState extends State<SportsListColumn> {
   final ApiService _apiService = ApiService();
   
-  // --- MODIFIED ---
-  // State to manage the view hierarchy
   String? _selectedSport;
   String? _selectedTeam;
   Future<List<String>>? _teamsFuture;
+  Future<List<Fixture>>? _teamFixturesFuture;
+  Future<List<StandingsTable>>? _standingsFuture;
 
-  // --- NEW ---
-  // State for the team detail view
   int _selectedTabIndex = 0;
   final PageController _pageController = PageController();
 
@@ -233,12 +232,23 @@ class _SportsListColumnState extends State<SportsListColumn> {
   void _onTeamSelected(String teamName) {
     setState(() {
       _selectedTeam = teamName;
+      _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
+      _teamFixturesFuture!.then((fixtures) {
+        if (fixtures.isNotEmpty) {
+          final gradeId = fixtures.first.gradeId;
+          setState(() {
+            _standingsFuture = _apiService.getStandings(gradeId);
+          });
+        }
+      });
     });
   }
 
   void _onBackToTeams() {
     setState(() {
       _selectedTeam = null;
+      _teamFixturesFuture = null;
+      _standingsFuture = null;
     });
   }
 
@@ -247,6 +257,8 @@ class _SportsListColumnState extends State<SportsListColumn> {
       _selectedSport = null;
       _selectedTeam = null;
       _teamsFuture = null;
+      _teamFixturesFuture = null;
+      _standingsFuture = null;
     });
   }
 
@@ -270,8 +282,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
     );
   }
 
-  // --- MODIFIED ---
-  // Header logic is now more complex to handle three levels of navigation
   Widget _buildHeader() {
     if (_selectedSport == null) {
       return Text(
@@ -329,8 +339,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
     }
   }
 
-  // --- MODIFIED ---
-  // Content logic now switches between three different views
   Widget _buildContent() {
     if (_selectedSport == null) {
       return _buildSportsList();
@@ -424,9 +432,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
       },
     );
   }
-
-  // --- NEW WIDGET ---
-  // This builds the team detail view with toggleable tabs
+  
   Widget _buildTeamDetails() {
     return Column(
       children: [
@@ -445,11 +451,11 @@ class _SportsListColumnState extends State<SportsListColumn> {
           borderRadius: BorderRadius.circular(8),
           children: const [
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
               child: Text('Fixtures & Results'),
             ),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
               child: Text('Standings'),
             ),
           ],
@@ -464,9 +470,8 @@ class _SportsListColumnState extends State<SportsListColumn> {
               });
             },
             children: [
-              // --- Placeholder Content ---
-              _buildPlaceholderContent("Fixtures & Results"),
-              _buildPlaceholderContent("Standings Table(s)"),
+              _buildFixturesContent(),
+              _buildStandingsContent(),
             ],
           ),
         ),
@@ -474,29 +479,163 @@ class _SportsListColumnState extends State<SportsListColumn> {
     );
   }
 
-  // --- NEW WIDGET ---
-  // Placeholder for future content
-  Widget _buildPlaceholderContent(String title) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Center(
+  Widget _buildFixturesContent() {
+    return FutureBuilder<List<Fixture>>(
+      future: _teamFixturesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No fixtures found.'));
+        }
+
+        final fixtures = snapshot.data!;
+        return ListView.builder(
+          itemCount: fixtures.length,
+          itemBuilder: (context, index) {
+            return _FixtureResultCard(fixture: fixtures[index]);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStandingsContent() {
+    return FutureBuilder<List<StandingsTable>>(
+      future: _standingsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading standings: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No standings available.'));
+        }
+
+        final tables = snapshot.data!;
+        return ListView.builder(
+          itemCount: tables.length,
+          itemBuilder: (context, index) {
+            final table = tables[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        table.sectionName,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowHeight: 40,
+                        dataRowMinHeight: 35,
+                        dataRowMaxHeight: 40,
+                        columns: const [
+                          DataColumn(label: Text('Team')),
+                          DataColumn(label: Text('P'), numeric: true),
+                          DataColumn(label: Text('W'), numeric: true),
+                          DataColumn(label: Text('L'), numeric: true),
+                          DataColumn(label: Text('D'), numeric: true),
+                          DataColumn(label: Text('Pts'), numeric: true),
+                        ],
+                        rows: table.standings.map((s) => DataRow(cells: [
+                          DataCell(Text(s.teamName)), 
+                          DataCell(Text(s.played.toString())),
+                          DataCell(Text(s.win.toString())),
+                          DataCell(Text(s.loss.toString())),
+                          DataCell(Text(s.draw.toString())),
+                          DataCell(Text(s.total.toString())),
+                        ])).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+
+class _FixtureResultCard extends StatelessWidget {
+  final Fixture fixture;
+  const _FixtureResultCard({required this.fixture});
+
+  @override
+  Widget build(BuildContext context) {
+    // --- MODIFIED ---
+    // A game is considered finished if scores are present OR the API gives a non-zero result status.
+    final bool hasScore = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
+                          (fixture.awayScore != null && fixture.awayScore!.isNotEmpty);
+    final bool isFinished = hasScore || fixture.resultStatus != 0;
+
+    final homeScore = fixture.homeScore ?? '';
+    final awayScore = fixture.awayScore ?? '';
+    final scoreColor = Theme.of(context).colorScheme.primary;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.construction, size: 48, color: Colors.grey),
-            const SizedBox(height: 16),
             Text(
-              "$title Content",
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Coming soon!",
+              DateFormat('EEE, d MMM yy - hh:mm a').format(DateTime.parse(fixture.dateTime)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            const SizedBox(height: 8),
+            
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("${fixture.homeSchool}: ${fixture.homeTeam}", style: Theme.of(context).textTheme.titleMedium),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text('vs', style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.5)),
+                      ),
+                      Text("${fixture.awaySchool}: ${fixture.awayTeam}", style: Theme.of(context).textTheme.titleMedium),
+                    ],
+                  ),
+                ),
+                if (isFinished)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16.0),
+                    child: Text(
+                      '$homeScore - $awayScore',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: scoreColor,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            if (!isFinished)
+              Text(fixture.venue, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 // lib/models.dart
 
 class Fixture {
+  final int gradeId; // Added to help with standings lookup
   final String sport;
   final String competition;
   final String dateTime;
@@ -14,8 +15,13 @@ class Fixture {
   final bool premier;
   final double? lat;
   final double? lng;
+  final String? homeScore;
+  final String? awayScore;
+  final int resultStatus;
+
 
   Fixture({
+    required this.gradeId,
     required this.sport,
     required this.competition,
     required this.dateTime,
@@ -29,6 +35,9 @@ class Fixture {
     required this.premier,
     this.lat,
     this.lng,
+    this.homeScore,
+    this.awayScore,
+    required this.resultStatus,
   });
 
   factory Fixture.fromJson(Map<String, dynamic> json, Map<String, dynamic> metadata) {
@@ -42,16 +51,10 @@ class Fixture {
 
     final competitionName = json['CompetitionName'] as String? ?? '';
     final gradeName = json['GradeName'] as String? ?? '';
-    final sectionName = json['SectionName'] as String? ?? '';
-    final roundName = json['RoundName'] as String? ?? '';
-    
-    final competitionParts = [competitionName, gradeName, sectionName, roundName]
-        .where((part) => part.isNotEmpty && part != "N/A")
-        .toList();
-    final fullCompetitionName = competitionParts.join(' - ');
+    final fullCompetitionName = '$competitionName - $gradeName';
 
-    final homeTeamName = json['HomeTeamName'] as String? ?? '';
-    final awayTeamName = json['AwayTeamName'] as String? ?? '';
+    final homeTeamName = json['HomeTeamName'] ?? 'TBC';
+    final awayTeamName = json['AwayTeamName'] ?? 'TBC';
 
     final isPremier = competitionName.toLowerCase().contains('premier') ||
                       gradeName.toLowerCase().contains('premier') ||
@@ -68,6 +71,7 @@ class Fixture {
     }
 
     return Fixture(
+      gradeId: json['GradeId'] ?? 0,
       sport: sportName,
       competition: fullCompetitionName,
       dateTime: json['From'] ?? '',
@@ -81,6 +85,9 @@ class Fixture {
       premier: isPremier,
       lat: json['LocationLat'],
       lng: json['LocationLng'],
+      homeScore: json['HomeScore'],
+      awayScore: json['AwayScore'],
+      resultStatus: json['ResultStatus'] ?? 0,
     );
   }
 }
@@ -97,6 +104,60 @@ class Sport {
       id: json['Id'],
       name: json['Name'],
       icon: icon,
+    );
+  }
+}
+
+// --- NEW MODELS FOR STANDINGS ---
+
+class StandingsTable {
+  final String gradeName;
+  final String sectionName;
+  final List<Standing> standings;
+
+  StandingsTable({
+    required this.gradeName,
+    required this.sectionName,
+    required this.standings,
+  });
+
+  factory StandingsTable.fromJson(Map<String, dynamic> json) {
+    var standingsList = json['Standings'] as List;
+    List<Standing> standings = standingsList.map((i) => Standing.fromJson(i)).toList();
+    return StandingsTable(
+      gradeName: json['GradeName'],
+      sectionName: json['SectionName'],
+      standings: standings,
+    );
+  }
+}
+
+
+class Standing {
+  final String teamName;
+  final int played;
+  final int win;
+  final int loss;
+  final int draw;
+  final int total;
+
+  Standing({
+    required this.teamName,
+    required this.played,
+    required this.win,
+    required this.loss,
+    required this.draw,
+    required this.total,
+  });
+
+  factory Standing.fromJson(Map<String, dynamic> json) {
+    return Standing(
+      teamName: json['TeamName'],
+      played: json['Played'],
+      win: json['Win'],
+      loss: json['Loss'],
+      draw: json['Draw'],
+      total: json['Total'],
     );
   }
 }
