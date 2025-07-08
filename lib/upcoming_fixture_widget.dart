@@ -52,9 +52,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
     _resetFiltersAndFetch();
   }
 
-  // --- NEW ---
-  // This lifecycle method is called when the widget's properties change,
-  // e.g., when switching from the "Upcoming" to "Results" view.
   @override
   void didUpdateWidget(UpcomingFixtureWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -63,8 +60,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
     }
   }
 
-  // --- NEW HELPER METHOD ---
-  // Resets filters to the correct default for the current view and fetches data.
   void _resetFiltersAndFetch() {
     setState(() {
       if (widget.isResultsView) {
@@ -255,16 +250,17 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 },
                 tooltip: 'Filter Fixtures',
               ),
-              if (!widget.isResultsView)
-                IconButton(
-                  icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
-                  onPressed: () {
-                    setState(() {
-                      _isCompactView = !_isCompactView;
-                    });
-                  },
-                  tooltip: _isCompactView ? 'Show Detailed View' : 'Show Compact View',
-                ),
+              // --- MODIFIED ---
+              // The compact view toggle is now always shown.
+              IconButton(
+                icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
+                onPressed: () {
+                  setState(() {
+                    _isCompactView = !_isCompactView;
+                  });
+                },
+                tooltip: _isCompactView ? 'Show Detailed View' : 'Show Compact View',
+              ),
             ],
           ),
         ),
@@ -309,12 +305,9 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 itemCount: filteredFixtures.length,
                 itemBuilder: (context, index) {
                   final fixture = filteredFixtures[index];
-                  if (widget.isResultsView) {
-                    return _DetailedFixtureCard(fixture: fixture, isResult: true);
-                  }
                   return _isCompactView
-                      ? _CompactFixtureCard(fixture: fixture)
-                      : _DetailedFixtureCard(fixture: fixture, isResult: false);
+                      ? _CompactFixtureCard(fixture: fixture, isResult: widget.isResultsView)
+                      : _DetailedFixtureCard(fixture: fixture, isResult: widget.isResultsView);
                 },
               );
             },
@@ -327,7 +320,10 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
 
 class _CompactFixtureCard extends StatelessWidget {
   final Fixture fixture;
-  const _CompactFixtureCard({required this.fixture});
+  // --- NEW ---
+  // Flag to determine if the card should display a result.
+  final bool isResult;
+  const _CompactFixtureCard({required this.fixture, required this.isResult});
 
   String _formatCompactDateTime(String dateTimeString) {
     if (dateTimeString.isEmpty) return 'Date TBC';
@@ -344,6 +340,8 @@ class _CompactFixtureCard extends StatelessWidget {
     const String ourSchool = "Sacred Heart College (Auckland)";
     final ourTeam = fixture.homeSchool == ourSchool ? fixture.homeTeam : fixture.awayTeam;
     final opponentSchool = fixture.homeSchool == ourSchool ? fixture.awaySchool : fixture.homeSchool;
+    final homeScore = fixture.homeScore ?? '-';
+    final awayScore = fixture.awayScore ?? '-';
 
     return Card(
       elevation: 1,
@@ -374,7 +372,17 @@ class _CompactFixtureCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              Text(_formatCompactDateTime(fixture.dateTime), style: Theme.of(context).textTheme.bodyLarge),
+              // --- MODIFIED ---
+              // Show score for results, otherwise show date/time.
+              isResult
+                ? Text(
+                    '$homeScore - $awayScore',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  )
+                : Text(
+                    _formatCompactDateTime(fixture.dateTime),
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
             ],
           ),
         ),
@@ -500,15 +508,16 @@ class _DetailedFixtureCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              if (!isResult)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 8),
-                    Flexible(child: Text(fixture.venue, textAlign: TextAlign.center)),
-                  ],
-                ),
+              // --- MODIFIED ---
+              // The location is now always shown for both results and upcoming fixtures.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text(fixture.venue, textAlign: TextAlign.center)),
+                ],
+              ),
                if (fixture.premier)
                 Padding(
                   padding: const EdgeInsets.only(top: 16.0),

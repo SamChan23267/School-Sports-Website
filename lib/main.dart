@@ -56,7 +56,6 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-// --- MODIFIED ENUM FOR NAVIGATION ---
 enum AppView { upcomingFixtures, results, selectTeam }
 
 class LandingPage extends StatefulWidget {
@@ -154,7 +153,6 @@ class _LandingPageState extends State<LandingPage> {
                 Navigator.pop(context);
               },
             ),
-            // --- NEW MENU OPTION ---
             ListTile(
               leading: const Icon(Icons.emoji_events),
               title: const Text('Results'),
@@ -188,13 +186,9 @@ class _LandingPageState extends State<LandingPage> {
     Widget content;
     switch (_currentView) {
       case AppView.upcomingFixtures:
-        // --- MODIFIED ---
-        // Passing a flag to indicate this is the "upcoming" view.
         content = const UpcomingFixtureWidget(isResultsView: false);
         break;
       case AppView.results:
-        // --- MODIFIED ---
-        // Passing a flag to indicate this is the "results" view.
         content = const UpcomingFixtureWidget(isResultsView: true);
         break;
       case AppView.selectTeam:
@@ -599,6 +593,25 @@ class _FixtureResultCard extends StatelessWidget {
   final Fixture fixture;
   const _FixtureResultCard({required this.fixture});
 
+  Widget _buildTeamDisplay(BuildContext context, String school, String team, {required CrossAxisAlignment alignment}) {
+    return Column(
+      crossAxisAlignment: alignment,
+      children: [
+        Text(
+          school,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          team,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasScore = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
@@ -620,42 +633,60 @@ class _FixtureResultCard extends StatelessWidget {
               DateFormat('EEE, d MMM yy - hh:mm a').format(DateTime.parse(fixture.dateTime)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${fixture.homeSchool}: ${fixture.homeTeam}", style: Theme.of(context).textTheme.titleMedium),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Text('vs', style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.5)),
-                      ),
-                      Text("${fixture.awaySchool}: ${fixture.awayTeam}", style: Theme.of(context).textTheme.titleMedium),
-                    ],
+                  child: _buildTeamDisplay(
+                    context,
+                    fixture.homeSchool,
+                    fixture.homeTeam,
+                    alignment: CrossAxisAlignment.start,
                   ),
                 ),
-                if (isFinished)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16.0),
-                    child: Text(
-                      '$homeScore - $awayScore',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: scoreColor,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: isFinished 
+                    ? Text(
+                        '$homeScore - $awayScore',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: scoreColor),
+                      )
+                    : Text(
+                        'vs',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey),
                       ),
-                    ),
+                ),
+                Expanded(
+                  child: _buildTeamDisplay(
+                    context,
+                    fixture.awaySchool,
+                    fixture.awayTeam,
+                    alignment: CrossAxisAlignment.end,
                   ),
+                ),
               ],
             ),
             
             const SizedBox(height: 8),
-            if (!isFinished)
-              Text(fixture.venue, style: Theme.of(context).textTheme.bodySmall),
+            // --- MODIFIED ---
+            // The location is now always displayed.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    fixture.venue,
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

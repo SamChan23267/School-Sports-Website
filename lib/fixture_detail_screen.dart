@@ -16,22 +16,18 @@ class FixtureDetailScreen extends StatelessWidget {
     if (dateTimeString.isEmpty) return 'Date TBC';
     try {
       final dateTime = DateTime.parse(dateTimeString);
-      // Using a more detailed format for the detail screen
       return DateFormat('EEEE, d MMMM yyyy, h:mm a').format(dateTime);
     } catch (e) {
-      // Return original string if parsing fails
       return dateTimeString;
     }
   }
 
-  // --- NEW: Function to launch maps ---
   Future<void> _launchMapsUrl(double lat, double lng) async {
     final Uri url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
     if (!await launchUrl(url)) {
       throw Exception('Could not launch $url');
     }
   }
-  // --- END NEW ---
 
   @override
   Widget build(BuildContext context) {
@@ -39,10 +35,8 @@ class FixtureDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(fixture.sport),
       ),
-      // Use a LayoutBuilder to create a responsive layout
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // Use a wider breakpoint for a better side-by-side experience
           if (constraints.maxWidth > 800) {
             return _buildWideLayout(context);
           } else {
@@ -53,7 +47,6 @@ class FixtureDetailScreen extends StatelessWidget {
     );
   }
 
-  /// Layout for narrow screens (e.g., mobile phones in portrait)
   Widget _buildNarrowLayout(BuildContext context) {
     final hasLocation = fixture.lat != null && fixture.lng != null;
     return SingleChildScrollView(
@@ -86,7 +79,6 @@ class FixtureDetailScreen extends StatelessWidget {
               child: _buildMap(hasLocation),
             ),
             const SizedBox(height: 16),
-            // --- NEW: Get Directions Button ---
             if (hasLocation)
               Center(
                 child: ElevatedButton.icon(
@@ -99,14 +91,12 @@ class FixtureDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
-            // --- END NEW ---
           ],
         ),
       ),
     );
   }
 
-  /// Layout for wide screens (e.g., desktop, tablets in landscape)
   Widget _buildWideLayout(BuildContext context) {
     final hasLocation = fixture.lat != null && fixture.lng != null;
     return Padding(
@@ -114,9 +104,8 @@ class FixtureDetailScreen extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left column for fixture details
           Expanded(
-            flex: 3, // Give more space to the details
+            flex: 3,
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,9 +142,8 @@ class FixtureDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 32),
-          // Right column for the map
           Expanded(
-            flex: 2, // Give less space to the map to make it more square
+            flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -165,7 +153,6 @@ class FixtureDetailScreen extends StatelessWidget {
                   child: _buildMap(hasLocation),
                 ),
                 const SizedBox(height: 16),
-                // --- NEW: Get Directions Button ---
                 if (hasLocation)
                   Center(
                     child: ElevatedButton.icon(
@@ -179,7 +166,6 @@ class FixtureDetailScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                // --- END NEW ---
               ],
             ),
           ),
@@ -188,7 +174,6 @@ class FixtureDetailScreen extends StatelessWidget {
     );
   }
 
-  /// A shared widget for displaying date and venue information.
   Widget _buildInfoCard(BuildContext context, {bool isWide = false}) {
     final textStyle = isWide
         ? Theme.of(context).textTheme.titleMedium
@@ -228,7 +213,6 @@ class FixtureDetailScreen extends StatelessWidget {
     );
   }
 
-  /// A shared widget for building the map display.
   Widget _buildMap(bool hasLocation) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
@@ -271,13 +255,17 @@ class _TeamVsWidget extends StatelessWidget {
 
   const _TeamVsWidget({
     required this.fixture,
-    this.iconSize = 32, // Default icon size
-    this.textStyle,     // Default text style is null, will fallback to theme
+    this.iconSize = 32,
+    this.textStyle,
   });
 
-  Widget _buildTeamRow(BuildContext context, String school, String team, String? logoUrl) {
-    // Use the provided textStyle or fallback to the default theme
+  // --- MODIFIED ---
+  // This widget now displays the score if the game is finished.
+  Widget _buildTeamRow(BuildContext context, String school, String team, String? logoUrl, String? score) {
     final effectiveTextStyle = textStyle ?? Theme.of(context).textTheme.titleMedium;
+    final bool isFinished = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
+                            (fixture.awayScore != null && fixture.awayScore!.isNotEmpty) ||
+                            fixture.resultStatus != 0;
 
     return Row(
       children: [
@@ -298,6 +286,16 @@ class _TeamVsWidget extends StatelessWidget {
             style: effectiveTextStyle,
           ),
         ),
+        // --- NEW ---
+        // Display the score on the right if the game is finished.
+        if (isFinished)
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0),
+            child: Text(
+              score ?? '-',
+              style: effectiveTextStyle?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
       ],
     );
   }
@@ -307,12 +305,12 @@ class _TeamVsWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTeamRow(context, fixture.homeSchool, fixture.homeTeam, fixture.homeOrgLogo),
+        _buildTeamRow(context, fixture.homeSchool, fixture.homeTeam, fixture.homeOrgLogo, fixture.homeScore),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
           child: Text('vs', style: Theme.of(context).textTheme.bodySmall),
         ),
-        _buildTeamRow(context, fixture.awaySchool, fixture.awayTeam, fixture.awayOrgLogo),
+        _buildTeamRow(context, fixture.awaySchool, fixture.awayTeam, fixture.awayOrgLogo, fixture.awayScore),
       ],
     );
   }
