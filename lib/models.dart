@@ -49,14 +49,23 @@ class Fixture {
     );
     final String sportName = sportMeta['Name'];
 
-    final competitionName = json['CompetitionName'] as String? ?? '';
+    // --- MODIFIED ---
+    // This logic now combines Grade, Section, and Round for a more detailed competition name.
     final gradeName = json['GradeName'] as String? ?? '';
-    final fullCompetitionName = '$competitionName - $gradeName';
+    final sectionName = json['SectionName'] as String? ?? '';
+    final roundName = json['RoundName'] as String? ?? '';
+    
+    // Filter out empty or "N/A" parts before joining them with a separator.
+    final competitionParts = [gradeName, sectionName, roundName]
+        .where((part) => part.isNotEmpty && part != "N/A")
+        .toList();
+    final fullCompetitionName = competitionParts.join(' - ');
+
 
     final homeTeamName = json['HomeTeamName'] ?? 'TBC';
     final awayTeamName = json['AwayTeamName'] ?? 'TBC';
 
-    final isPremier = competitionName.toLowerCase().contains('premier') ||
+    final isPremier = (json['CompetitionName'] as String? ?? '').toLowerCase().contains('premier') ||
                       gradeName.toLowerCase().contains('premier') ||
                       homeTeamName.toLowerCase().contains('premier') ||
                       awayTeamName.toLowerCase().contains('premier');
@@ -73,7 +82,7 @@ class Fixture {
     return Fixture(
       gradeId: json['GradeId'] ?? 0,
       sport: sportName,
-      competition: fullCompetitionName,
+      competition: fullCompetitionName.isNotEmpty ? fullCompetitionName : "Competition details not available",
       dateTime: json['From'] ?? '',
       venue: json['VenueName'] ?? 'TBC',
       homeTeam: homeTeamName,

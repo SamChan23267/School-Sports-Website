@@ -56,7 +56,10 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class LandingPage extends StatelessWidget {
+// --- NEW ENUM FOR NAVIGATION ---
+enum AppView { upcomingFixtures, selectTeam }
+
+class LandingPage extends StatefulWidget {
   final ThemeMode themeMode;
   final VoidCallback onToggleTheme;
 
@@ -67,141 +70,139 @@ class LandingPage extends StatelessWidget {
   });
 
   @override
+  State<LandingPage> createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage> {
+  // State to manage the currently displayed view
+  AppView _currentView = AppView.upcomingFixtures;
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).appBarTheme.backgroundColor ??
-                  Theme.of(context).colorScheme.primary,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+      appBar: AppBar(
+        title: Text(
+          _currentView == AppView.upcomingFixtures 
+            ? 'Upcoming Fixtures' 
+            : 'Select Team',
+        ),
+        actions: [
+          // --- MODIFIED ---
+          // Added Contact Us and Login buttons back to the AppBar
+          TextButton(
+            onPressed: () {},
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.sports_soccer,
-                        color: Theme.of(context).colorScheme.primary, size: 32),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Sports Fixtures',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 24,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () {},
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      child: const Text('Contact Us'),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimaryContainer,
-                        side: BorderSide(
-                            color: Theme.of(context).colorScheme.primary),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
-                      ),
-                      onPressed: () {},
-                      child: const Text(
-                        'Login',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    IconButton(
-                      tooltip: "Toggle dark mode",
-                      icon: Icon(
-                        themeMode == ThemeMode.dark
-                            ? Icons.nightlight_round
-                            : Icons.wb_sunny,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      onPressed: onToggleTheme,
-                    ),
-                  ],
-                ),
-              ],
+            child: const Text('Contact Us'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+            ),
+            onPressed: () {},
+            child: const Text(
+              'Login',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Flexible(
-                      flex: 2,
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.only(top: 40, right: 24, left: 24),
-                        child: Material(
-                          elevation: 3,
-                          borderRadius: BorderRadius.circular(18),
-                          color: Theme.of(context).colorScheme.surface,
-                          child: const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: SportsListColumn(),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Flexible(
-                      flex: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 48, horizontal: 16),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: Theme.of(context)
-                                  .dividerColor
-                                  .withOpacity(0.15),
-                            ),
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surface
-                                .withOpacity(0.5),
-                          ),
-                          child: const UpcomingFixtureWidget(),
-                        ),
-                      ),
-                    ),
-                  ],
+          const SizedBox(width: 14),
+          IconButton(
+            tooltip: "Toggle dark mode",
+            icon: Icon(
+              widget.themeMode == ThemeMode.dark
+                  ? Icons.nightlight_round
+                  : Icons.wb_sunny,
+            ),
+            onPressed: widget.onToggleTheme,
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              child: const Text(
+                'Menu',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
                 ),
               ),
             ),
+            ListTile(
+              leading: const Icon(Icons.calendar_today),
+              title: const Text('Upcoming Fixtures'),
+              selected: _currentView == AppView.upcomingFixtures,
+              onTap: () {
+                setState(() {
+                  _currentView = AppView.upcomingFixtures;
+                });
+                Navigator.pop(context); // Close the drawer
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.group_work),
+              title: const Text('Select Team'),
+              selected: _currentView == AppView.selectTeam,
+              onTap: () {
+                setState(() {
+                  _currentView = AppView.selectTeam;
+                });
+                Navigator.pop(context); // Close the drawer
+              },
+            ),
+          ],
+        ),
+      ),
+      body: _buildCurrentView(),
+    );
+  }
+
+  /// Builds the main content area based on the currently selected view.
+  Widget _buildCurrentView() {
+    Widget content;
+    switch (_currentView) {
+      case AppView.upcomingFixtures:
+        content = const UpcomingFixtureWidget();
+        break;
+      case AppView.selectTeam:
+        content = const SportsListColumn();
+        break;
+    }
+
+    // Center the content and constrain its width for a consistent look on larger screens.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1200),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Theme.of(context).dividerColor.withOpacity(0.15),
+              ),
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+            ),
+            child: content,
           ),
-        ],
+        ),
       ),
     );
   }
 }
+
 
 class SportsListColumn extends StatefulWidget {
   const SportsListColumn({super.key});
@@ -579,8 +580,6 @@ class _FixtureResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- MODIFIED ---
-    // A game is considered finished if scores are present OR the API gives a non-zero result status.
     final bool hasScore = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
                           (fixture.awayScore != null && fixture.awayScore!.isNotEmpty);
     final bool isFinished = hasScore || fixture.resultStatus != 0;
