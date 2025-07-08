@@ -210,16 +210,25 @@ class SportsListColumn extends StatefulWidget {
 }
 
 class _SportsListColumnState extends State<SportsListColumn> {
-  late Future<List<Sport>> _sportsFuture;
   final ApiService _apiService = ApiService();
+  
+  // --- MODIFIED ---
+  // State to manage the view
+  String? _selectedSport;
+  Future<List<String>>? _teamsFuture;
 
-  @override
-  void initState() {
-    super.initState();
-    // --- MODIFIED ---
-    // The FutureBuilder now calls the new method to get only the sports
-    // relevant to Sacred Heart College.
-    _sportsFuture = _apiService.getSportsForSacredHeart();
+  void _onSportSelected(String sportName) {
+    setState(() {
+      _selectedSport = sportName;
+      _teamsFuture = _apiService.getTeamsForSport(sportName);
+    });
+  }
+
+  void _onBackToSports() {
+    setState(() {
+      _selectedSport = null;
+      _teamsFuture = null;
+    });
   }
 
   @override
@@ -227,63 +236,133 @@ class _SportsListColumnState extends State<SportsListColumn> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Sports",
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
+        // --- MODIFIED ---
+        // Header now changes based on the view
+        if (_selectedSport == null)
+          Text(
+            "Sports",
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          )
+        else
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _onBackToSports,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _selectedSport!,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-        ),
         const SizedBox(height: 20),
         Expanded(
-          child: FutureBuilder<List<Sport>>(
-            future: _sportsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text('No sports found.'));
-              }
-
-              final sports = snapshot.data!;
-              return ListView.builder(
-                itemCount: sports.length,
-                itemBuilder: (context, index) {
-                  final sport = sports[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    elevation: 0,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .secondaryContainer
-                        .withOpacity(0.8),
-                    child: ListTile(
-                      leading: Text(
-                        sport.icon,
-                        style: const TextStyle(fontSize: 32),
-                      ),
-                      title: Text(
-                        sport.name,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                      onTap: () {
-                        // TODO: Navigate to Teams List Page for sport.id
-                      },
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+          // --- MODIFIED ---
+          // Conditionally show either the Sports list or the Teams list
+          child: _selectedSport == null
+              ? _buildSportsList()
+              : _buildTeamsList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildSportsList() {
+    return FutureBuilder<List<Sport>>(
+      future: _apiService.getSportsForSacredHeart(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No sports found.'));
+        }
+
+        final sports = snapshot.data!;
+        return ListView.builder(
+          itemCount: sports.length,
+          itemBuilder: (context, index) {
+            final sport = sports[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              elevation: 0,
+              color: Theme.of(context)
+                  .colorScheme
+                  .secondaryContainer
+                  .withOpacity(0.8),
+              child: ListTile(
+                leading: Text(
+                  sport.icon,
+                  style: const TextStyle(fontSize: 32),
+                ),
+                title: Text(
+                  sport.name,
+                  style: const TextStyle(fontSize: 18),
+                ),
+                onTap: () => _onSportSelected(sport.name), // --- MODIFIED ---
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTeamsList() {
+    return FutureBuilder<List<String>>(
+      future: _teamsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No teams found for this sport.'));
+        }
+
+        final teams = snapshot.data!;
+        return ListView.builder(
+          itemCount: teams.length,
+          itemBuilder: (context, index) {
+            final teamName = teams[index];
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  // TODO: Filter the main fixture list by this team name
+                },
+                child: Text(teamName, textAlign: TextAlign.center),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
