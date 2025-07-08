@@ -56,8 +56,8 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-// --- NEW ENUM FOR NAVIGATION ---
-enum AppView { upcomingFixtures, selectTeam }
+// --- MODIFIED ENUM FOR NAVIGATION ---
+enum AppView { upcomingFixtures, results, selectTeam }
 
 class LandingPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -74,21 +74,25 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  // State to manage the currently displayed view
   AppView _currentView = AppView.upcomingFixtures;
+
+  String get _currentViewTitle {
+    switch (_currentView) {
+      case AppView.upcomingFixtures:
+        return 'Upcoming Fixtures';
+      case AppView.results:
+        return 'Results';
+      case AppView.selectTeam:
+        return 'Select Team';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _currentView == AppView.upcomingFixtures 
-            ? 'Upcoming Fixtures' 
-            : 'Select Team',
-        ),
+        title: Text(_currentViewTitle),
         actions: [
-          // --- MODIFIED ---
-          // Added Contact Us and Login buttons back to the AppBar
           TextButton(
             onPressed: () {},
             style: TextButton.styleFrom(
@@ -147,7 +151,19 @@ class _LandingPageState extends State<LandingPage> {
                 setState(() {
                   _currentView = AppView.upcomingFixtures;
                 });
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
+              },
+            ),
+            // --- NEW MENU OPTION ---
+            ListTile(
+              leading: const Icon(Icons.emoji_events),
+              title: const Text('Results'),
+              selected: _currentView == AppView.results,
+              onTap: () {
+                setState(() {
+                  _currentView = AppView.results;
+                });
+                Navigator.pop(context);
               },
             ),
             ListTile(
@@ -158,7 +174,7 @@ class _LandingPageState extends State<LandingPage> {
                 setState(() {
                   _currentView = AppView.selectTeam;
                 });
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
               },
             ),
           ],
@@ -168,19 +184,24 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  /// Builds the main content area based on the currently selected view.
   Widget _buildCurrentView() {
     Widget content;
     switch (_currentView) {
       case AppView.upcomingFixtures:
-        content = const UpcomingFixtureWidget();
+        // --- MODIFIED ---
+        // Passing a flag to indicate this is the "upcoming" view.
+        content = const UpcomingFixtureWidget(isResultsView: false);
+        break;
+      case AppView.results:
+        // --- MODIFIED ---
+        // Passing a flag to indicate this is the "results" view.
+        content = const UpcomingFixtureWidget(isResultsView: true);
         break;
       case AppView.selectTeam:
         content = const SportsListColumn();
         break;
     }
 
-    // Center the content and constrain its width for a consistent look on larger screens.
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),

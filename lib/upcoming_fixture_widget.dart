@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'api_service.dart';
 import 'models.dart';
-import 'fixture_detail_screen.dart'; // Import the new detail screen
+import 'fixture_detail_screen.dart'; 
+
 
 // --- Filter Model and Enums ---
 enum PremierStatus { all, premierOnly }
@@ -28,7 +29,9 @@ class FixtureFilters {
 // ---------------------------------
 
 class UpcomingFixtureWidget extends StatefulWidget {
-  const UpcomingFixtureWidget({super.key});
+  final bool isResultsView;
+
+  const UpcomingFixtureWidget({super.key, required this.isResultsView});
 
   @override
   State<UpcomingFixtureWidget> createState() => _UpcomingFixtureWidgetState();
@@ -37,8 +40,6 @@ class UpcomingFixtureWidget extends StatefulWidget {
 class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   Future<List<Fixture>>? _fixturesFuture;
   final ApiService _apiService = ApiService();
-  // --- MODIFIED ---
-  // Filters are now initialized in initState to set a dynamic default date.
   late FixtureFilters _filters;
   bool _isCompactView = false;
   
@@ -48,16 +49,43 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   @override
   void initState() {
     super.initState();
-    // --- MODIFIED ---
-    // Set the default date range to today -> next 7 days.
-    _filters = FixtureFilters(
-      dateRange: DateTimeRange(
-        start: DateTime.now(),
-        end: DateTime.now().add(const Duration(days: 7)),
-      ),
-    );
-    _fetchFixtures();
+    _resetFiltersAndFetch();
   }
+
+  // --- NEW ---
+  // This lifecycle method is called when the widget's properties change,
+  // e.g., when switching from the "Upcoming" to "Results" view.
+  @override
+  void didUpdateWidget(UpcomingFixtureWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isResultsView != oldWidget.isResultsView) {
+      _resetFiltersAndFetch();
+    }
+  }
+
+  // --- NEW HELPER METHOD ---
+  // Resets filters to the correct default for the current view and fetches data.
+  void _resetFiltersAndFetch() {
+    setState(() {
+      if (widget.isResultsView) {
+        _filters = FixtureFilters(
+          dateRange: DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 60)),
+            end: DateTime.now(),
+          ),
+        );
+      } else {
+        _filters = FixtureFilters(
+          dateRange: DateTimeRange(
+            start: DateTime.now(),
+            end: DateTime.now().add(const Duration(days: 7)),
+          ),
+        );
+      }
+      _fetchFixtures();
+    });
+  }
+
 
   void _fetchFixtures() {
     setState(() {
@@ -146,15 +174,12 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.start ?? DateTime.now(),
-                                // --- MODIFIED ---
-                                // Prevents selecting a date before today.
-                                firstDate: DateTime.now(),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: widget.isResultsView ? DateTime(2020) : DateTime.now(),
+                                lastDate: widget.isResultsView ? DateTime.now() : DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
                                   final end = _filters.dateRange?.end ?? picked.add(const Duration(days: 7));
-                                  // Ensure end date is not before the new start date
                                   _filters.dateRange = DateTimeRange(
                                     start: picked, 
                                     end: picked.isAfter(end) ? picked : end
@@ -172,10 +197,8 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.end ?? DateTime.now(),
-                                // --- MODIFIED ---
-                                // End date cannot be before the selected start date.
-                                firstDate: _filters.dateRange?.start ?? DateTime.now(),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: _filters.dateRange?.start ?? (widget.isResultsView ? DateTime(2020) : DateTime.now()),
+                                lastDate: widget.isResultsView ? DateTime.now() : DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
@@ -194,15 +217,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    // --- MODIFIED ---
-                    // Resets to the new default date range.
-                    setState(() => _filters = FixtureFilters(
-                      dateRange: DateTimeRange(
-                        start: DateTime.now(),
-                        end: DateTime.now().add(const Duration(days: 7)),
-                      ),
-                    ));
-                    _fetchFixtures();
+                    _resetFiltersAndFetch();
                     Navigator.of(context).pop();
                   },
                   child: const Text('Reset'),
@@ -240,16 +255,16 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 },
                 tooltip: 'Filter Fixtures',
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
-                onPressed: () {
-                  setState(() {
-                    _isCompactView = !_isCompactView;
-                  });
-                },
-                tooltip: _isCompactView ? 'Show Detailed View' : 'Show Compact View',
-              ),
+              if (!widget.isResultsView)
+                IconButton(
+                  icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
+                  onPressed: () {
+                    setState(() {
+                      _isCompactView = !_isCompactView;
+                    });
+                  },
+                  tooltip: _isCompactView ? 'Show Detailed View' : 'Show Compact View',
+                ),
             ],
           ),
         ),
@@ -261,17 +276,15 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Failed to load fixtures.\nError: ${snapshot.error}', textAlign: TextAlign.center)));
+                return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Failed to load data.\nError: ${snapshot.error}', textAlign: TextAlign.center)));
               }
               
               _allFixtures = snapshot.data ?? [];
               if (_allFixtures.isEmpty) {
-                return const Center(child: Text('No upcoming fixtures found for the selected criteria.'));
+                return const Center(child: Text('No fixtures found for the selected criteria.'));
               }
 
               final filteredFixtures = _allFixtures.where((f) {
-                // --- MODIFIED ---
-                // If a specific team is selected, the premier status filter is ignored.
                 final premierMatch = _filters.team != null || _filters.premierStatus == PremierStatus.all || f.premier;
                 final sportMatch = _filters.sport == null || f.sport == _filters.sport;
                 final teamMatch = _filters.team == null || f.homeTeam == _filters.team || f.awayTeam == _filters.team;
@@ -279,22 +292,29 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                                       (_filters.locationStatus == LocationStatus.home && f.venue.toLowerCase().contains("sacred heart")) ||
                                       (_filters.locationStatus == LocationStatus.away && !f.venue.toLowerCase().contains("sacred heart"));
                 
-                return premierMatch && sportMatch && teamMatch && locationMatch;
+                final bool hasScore = (f.homeScore != null && f.homeScore!.isNotEmpty) || (f.awayScore != null && f.awayScore!.isNotEmpty);
+                final bool isFinished = hasScore || f.resultStatus != 0;
+                final bool viewMatch = widget.isResultsView ? isFinished : !isFinished;
+
+                return premierMatch && sportMatch && teamMatch && locationMatch && viewMatch;
               }).toList();
               
               if (filteredFixtures.isEmpty) {
                  return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('No fixtures match the current filters.', textAlign: TextAlign.center)));
               }
 
-              filteredFixtures.sort((a, b) => DateTime.parse(a.dateTime).compareTo(DateTime.parse(b.dateTime)));
+              filteredFixtures.sort((a, b) => DateTime.parse(b.dateTime).compareTo(DateTime.parse(a.dateTime)));
 
               return ListView.builder(
                 itemCount: filteredFixtures.length,
                 itemBuilder: (context, index) {
                   final fixture = filteredFixtures[index];
+                  if (widget.isResultsView) {
+                    return _DetailedFixtureCard(fixture: fixture, isResult: true);
+                  }
                   return _isCompactView
                       ? _CompactFixtureCard(fixture: fixture)
-                      : _DetailedFixtureCard(fixture: fixture);
+                      : _DetailedFixtureCard(fixture: fixture, isResult: false);
                 },
               );
             },
@@ -365,7 +385,8 @@ class _CompactFixtureCard extends StatelessWidget {
 
 class _DetailedFixtureCard extends StatelessWidget {
   final Fixture fixture;
-  const _DetailedFixtureCard({required this.fixture});
+  final bool isResult;
+  const _DetailedFixtureCard({required this.fixture, required this.isResult});
 
   String _formatDateTime(String dateTimeString) {
     if (dateTimeString.isEmpty) return 'Date TBC';
@@ -412,6 +433,9 @@ class _DetailedFixtureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final homeScore = fixture.homeScore ?? '-';
+    final awayScore = fixture.awayScore ?? '-';
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -451,7 +475,9 @@ class _DetailedFixtureCard extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
-                    child: Text("vs", style: Theme.of(context).textTheme.headlineSmall),
+                    child: isResult 
+                      ? Text("$homeScore - $awayScore", style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold))
+                      : Text("vs", style: Theme.of(context).textTheme.headlineSmall),
                   ),
                   Expanded(
                     child: _buildTeamDisplay(
@@ -474,14 +500,15 @@ class _DetailedFixtureCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Flexible(child: Text(fixture.venue, textAlign: TextAlign.center)),
-                ],
-              ),
+              if (!isResult)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Flexible(child: Text(fixture.venue, textAlign: TextAlign.center)),
+                  ],
+                ),
                if (fixture.premier)
                 Padding(
                   padding: const EdgeInsets.only(top: 16.0),
