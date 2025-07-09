@@ -1,7 +1,8 @@
 // lib/models.dart
 
 class Fixture {
-  final int gradeId; // Added to help with standings lookup
+  final int competitionId; 
+  final int gradeId;
   final String sport;
   final String competition;
   final String dateTime;
@@ -21,6 +22,7 @@ class Fixture {
 
 
   Fixture({
+    required this.competitionId,
     required this.gradeId,
     required this.sport,
     required this.competition,
@@ -49,13 +51,10 @@ class Fixture {
     );
     final String sportName = sportMeta['Name'];
 
-    // --- MODIFIED ---
-    // This logic now combines Grade, Section, and Round for a more detailed competition name.
     final gradeName = json['GradeName'] as String? ?? '';
     final sectionName = json['SectionName'] as String? ?? '';
     final roundName = json['RoundName'] as String? ?? '';
     
-    // Filter out empty or "N/A" parts before joining them with a separator.
     final competitionParts = [gradeName, sectionName, roundName]
         .where((part) => part.isNotEmpty && part != "N/A")
         .toList();
@@ -80,6 +79,7 @@ class Fixture {
     }
 
     return Fixture(
+      competitionId: json['CompId'] ?? 0,
       gradeId: json['GradeId'] ?? 0,
       sport: sportName,
       competition: fullCompetitionName.isNotEmpty ? fullCompetitionName : "Competition details not available",
@@ -117,8 +117,6 @@ class Sport {
   }
 }
 
-// --- NEW MODELS FOR STANDINGS ---
-
 class StandingsTable {
   final String gradeName;
   final String sectionName;
@@ -148,6 +146,11 @@ class Standing {
   final int win;
   final int loss;
   final int draw;
+  final int byes;
+  final int bonus;
+  final int pointsFor;
+  final int pointsAgainst;
+  final int differential;
   final int total;
 
   Standing({
@@ -156,17 +159,27 @@ class Standing {
     required this.win,
     required this.loss,
     required this.draw,
+    required this.byes,
+    required this.bonus,
+    required this.pointsFor,
+    required this.pointsAgainst,
+    required this.differential,
     required this.total,
   });
 
   factory Standing.fromJson(Map<String, dynamic> json) {
     return Standing(
       teamName: json['TeamName'],
-      played: json['Played'],
-      win: json['Win'],
-      loss: json['Loss'],
-      draw: json['Draw'],
-      total: json['Total'],
+      played: json['Played'] ?? 0,
+      win: json['Win'] ?? 0,
+      loss: json['Loss'] ?? 0,
+      draw: json['Draw'] ?? 0,
+      byes: json['Byes'] ?? 0,
+      bonus: json['Bonus'] ?? 0,
+      pointsFor: json['For'] ?? 0,
+      pointsAgainst: json['Against'] ?? 0,
+      differential: json['Differential'] ?? 0,
+      total: json['Total'] ?? 0,
     );
   }
 }

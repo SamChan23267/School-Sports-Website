@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'api_service.dart';
 import 'models.dart';
-import 'fixture_detail_screen.dart'; // Import the new detail screen
+import 'fixture_detail_screen.dart'; 
+
 
 // --- Filter Model and Enums ---
 enum PremierStatus { all, premierOnly }
@@ -28,45 +29,66 @@ class FixtureFilters {
 // ---------------------------------
 
 class UpcomingFixtureWidget extends StatefulWidget {
-  const UpcomingFixtureWidget({super.key});
+  final bool isResultsView;
+
+  const UpcomingFixtureWidget({super.key, required this.isResultsView});
 
   @override
   State<UpcomingFixtureWidget> createState() => _UpcomingFixtureWidgetState();
 }
 
 class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
-  // --- MODIFIED ---
-  // This is no longer `late final` as we will be re-assigning it.
   Future<List<Fixture>>? _fixturesFuture;
   final ApiService _apiService = ApiService();
-  FixtureFilters _filters = FixtureFilters();
+  late FixtureFilters _filters;
   bool _isCompactView = false;
   
-  // --- MODIFIED ---
-  // We now have a dedicated list to hold all fixtures fetched from the API
-  // before client-side filtering is applied.
   List<Fixture> _allFixtures = [];
 
 
   @override
   void initState() {
     super.initState();
-    // --- MODIFIED ---
-    // Initial fetch when the widget loads.
-    _fetchFixtures();
+    _resetFiltersAndFetch();
   }
 
-  // --- NEW METHOD ---
-  // This method triggers the API call and updates the state.
+  @override
+  void didUpdateWidget(UpcomingFixtureWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isResultsView != oldWidget.isResultsView) {
+      _resetFiltersAndFetch();
+    }
+  }
+
+  void _resetFiltersAndFetch() {
+    setState(() {
+      if (widget.isResultsView) {
+        _filters = FixtureFilters(
+          dateRange: DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 60)),
+            end: DateTime.now(),
+          ),
+        );
+      } else {
+        _filters = FixtureFilters(
+          dateRange: DateTimeRange(
+            start: DateTime.now(),
+            end: DateTime.now().add(const Duration(days: 7)),
+          ),
+        );
+      }
+      _fetchFixtures();
+    });
+  }
+
+
   void _fetchFixtures() {
     setState(() {
-      // Pass the dateRange from our filters to the API service.
       _fixturesFuture = _apiService.getFixtures(dateRange: _filters.dateRange);
     });
   }
 
   void _showFilterDialog() {
-    // We use the cached list of all fixtures to populate the filter dialog dropdowns
     final sports = _allFixtures.map((f) => f.sport).toSet().toList()..sort();
     
     showDialog(
@@ -147,13 +169,16 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.start ?? DateTime.now(),
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: widget.isResultsView ? DateTime(2020) : DateTime.now(),
+                                lastDate: widget.isResultsView ? DateTime.now() : DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
-                                  final end = _filters.dateRange?.end ?? picked.add(const Duration(days: 30));
-                                  _filters.dateRange = DateTimeRange(start: picked, end: end);
+                                  final end = _filters.dateRange?.end ?? picked.add(const Duration(days: 7));
+                                  _filters.dateRange = DateTimeRange(
+                                    start: picked, 
+                                    end: picked.isAfter(end) ? picked : end
+                                  );
                                 });
                               }
                             },
@@ -167,12 +192,12 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.end ?? DateTime.now(),
-                                firstDate: _filters.dateRange?.start ?? DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: _filters.dateRange?.start ?? (widget.isResultsView ? DateTime(2020) : DateTime.now()),
+                                lastDate: widget.isResultsView ? DateTime.now() : DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
-                                  final start = _filters.dateRange?.start ?? picked.subtract(const Duration(days: 30));
+                                  final start = _filters.dateRange?.start ?? picked.subtract(const Duration(days: 7));
                                   _filters.dateRange = DateTimeRange(start: start, end: picked);
                                 });
                               }
@@ -187,18 +212,13 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    // --- MODIFIED ---
-                    // Reset the filters object, then re-fetch with the default date range.
-                    setState(() => _filters = FixtureFilters());
-                    _fetchFixtures();
+                    _resetFiltersAndFetch();
                     Navigator.of(context).pop();
                   },
                   child: const Text('Reset'),
                 ),
                 TextButton(
                   onPressed: () {
-                    // --- MODIFIED ---
-                    // This is the key change. Re-fetch data from the API with the new filters.
                     _fetchFixtures();
                     Navigator.of(context).pop();
                   },
@@ -224,14 +244,14 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               IconButton(
                 icon: const Icon(Icons.filter_list),
                 onPressed: () {
-                  // Only show the dialog if we have fixture data to populate it.
                   if (_allFixtures.isNotEmpty) {
                     _showFilterDialog();
                   }
                 },
                 tooltip: 'Filter Fixtures',
               ),
-              const SizedBox(width: 8),
+              // --- MODIFIED ---
+              // The compact view toggle is now always shown.
               IconButton(
                 icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
                 onPressed: () {
@@ -252,43 +272,42 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Failed to load fixtures.\nError: ${snapshot.error}', textAlign: TextAlign.center)));
+                return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Failed to load data.\nError: ${snapshot.error}', textAlign: TextAlign.center)));
               }
               
-              // --- MODIFIED ---
-              // We update our cached list of all fixtures with the new data from the API.
               _allFixtures = snapshot.data ?? [];
               if (_allFixtures.isEmpty) {
-                return const Center(child: Text('No upcoming fixtures found for the selected criteria.'));
+                return const Center(child: Text('No fixtures found for the selected criteria.'));
               }
 
-              // --- MODIFIED ---
-              // The client-side filtering now only handles non-date filters.
               final filteredFixtures = _allFixtures.where((f) {
-                final premierMatch = _filters.premierStatus == PremierStatus.all || f.premier;
+                final premierMatch = _filters.team != null || _filters.premierStatus == PremierStatus.all || f.premier;
                 final sportMatch = _filters.sport == null || f.sport == _filters.sport;
                 final teamMatch = _filters.team == null || f.homeTeam == _filters.team || f.awayTeam == _filters.team;
                 final locationMatch = _filters.locationStatus == LocationStatus.all ||
                                       (_filters.locationStatus == LocationStatus.home && f.venue.toLowerCase().contains("sacred heart")) ||
                                       (_filters.locationStatus == LocationStatus.away && !f.venue.toLowerCase().contains("sacred heart"));
                 
-                // The dateMatch check is no longer needed here as the API handles it.
-                return premierMatch && sportMatch && teamMatch && locationMatch;
+                final bool hasScore = (f.homeScore != null && f.homeScore!.isNotEmpty) || (f.awayScore != null && f.awayScore!.isNotEmpty);
+                final bool isFinished = hasScore || f.resultStatus != 0;
+                final bool viewMatch = widget.isResultsView ? isFinished : !isFinished;
+
+                return premierMatch && sportMatch && teamMatch && locationMatch && viewMatch;
               }).toList();
               
               if (filteredFixtures.isEmpty) {
                  return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('No fixtures match the current filters.', textAlign: TextAlign.center)));
               }
 
-              filteredFixtures.sort((a, b) => DateTime.parse(a.dateTime).compareTo(DateTime.parse(b.dateTime)));
+              filteredFixtures.sort((a, b) => DateTime.parse(b.dateTime).compareTo(DateTime.parse(a.dateTime)));
 
               return ListView.builder(
                 itemCount: filteredFixtures.length,
                 itemBuilder: (context, index) {
                   final fixture = filteredFixtures[index];
                   return _isCompactView
-                      ? _CompactFixtureCard(fixture: fixture)
-                      : _DetailedFixtureCard(fixture: fixture);
+                      ? _CompactFixtureCard(fixture: fixture, isResult: widget.isResultsView)
+                      : _DetailedFixtureCard(fixture: fixture, isResult: widget.isResultsView);
                 },
               );
             },
@@ -301,7 +320,10 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
 
 class _CompactFixtureCard extends StatelessWidget {
   final Fixture fixture;
-  const _CompactFixtureCard({required this.fixture});
+  // --- NEW ---
+  // Flag to determine if the card should display a result.
+  final bool isResult;
+  const _CompactFixtureCard({required this.fixture, required this.isResult});
 
   String _formatCompactDateTime(String dateTimeString) {
     if (dateTimeString.isEmpty) return 'Date TBC';
@@ -318,6 +340,8 @@ class _CompactFixtureCard extends StatelessWidget {
     const String ourSchool = "Sacred Heart College (Auckland)";
     final ourTeam = fixture.homeSchool == ourSchool ? fixture.homeTeam : fixture.awayTeam;
     final opponentSchool = fixture.homeSchool == ourSchool ? fixture.awaySchool : fixture.homeSchool;
+    final homeScore = fixture.homeScore ?? '-';
+    final awayScore = fixture.awayScore ?? '-';
 
     return Card(
       elevation: 1,
@@ -348,7 +372,17 @@ class _CompactFixtureCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              Text(_formatCompactDateTime(fixture.dateTime), style: Theme.of(context).textTheme.bodyLarge),
+              // --- MODIFIED ---
+              // Show score for results, otherwise show date/time.
+              isResult
+                ? Text(
+                    '$homeScore - $awayScore',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  )
+                : Text(
+                    _formatCompactDateTime(fixture.dateTime),
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
             ],
           ),
         ),
@@ -359,7 +393,8 @@ class _CompactFixtureCard extends StatelessWidget {
 
 class _DetailedFixtureCard extends StatelessWidget {
   final Fixture fixture;
-  const _DetailedFixtureCard({required this.fixture});
+  final bool isResult;
+  const _DetailedFixtureCard({required this.fixture, required this.isResult});
 
   String _formatDateTime(String dateTimeString) {
     if (dateTimeString.isEmpty) return 'Date TBC';
@@ -371,8 +406,44 @@ class _DetailedFixtureCard extends StatelessWidget {
     }
   }
 
+  Widget _buildTeamDisplay(BuildContext context, {
+    required String school,
+    required String team,
+    required String? logoUrl,
+    required CrossAxisAlignment alignment
+  }) {
+    return Column(
+      crossAxisAlignment: alignment,
+      children: [
+        if (logoUrl != null && logoUrl.isNotEmpty)
+          Image.network(
+            logoUrl,
+            width: 48,
+            height: 48,
+            errorBuilder: (context, error, stackTrace) => const Icon(Icons.shield, size: 48),
+          )
+        else
+          const Icon(Icons.shield, size: 48),
+        const SizedBox(height: 8),
+        Text(
+          school,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+        ),
+        Text(
+          team,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final homeScore = fixture.homeScore ?? '-';
+    final awayScore = fixture.awayScore ?? '-';
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -390,28 +461,66 @@ class _DetailedFixtureCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(fixture.sport, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(fixture.competition, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 12),
-              Row(children: [
-                Icon(Icons.calendar_today, size: 16, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(_formatDateTime(fixture.dateTime)),
-              ]),
-              const SizedBox(height: 8),
-              Row(children: [
-                Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(child: Text(fixture.venue)),
-              ]),
+              Text(fixture.competition, style: Theme.of(context).textTheme.bodySmall, textAlign: TextAlign.center,),
+              const SizedBox(height: 16),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _buildTeamDisplay(
+                      context,
+                      school: fixture.homeSchool,
+                      team: fixture.homeTeam,
+                      logoUrl: fixture.homeOrgLogo,
+                      alignment: CrossAxisAlignment.start,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+                    child: isResult 
+                      ? Text("$homeScore - $awayScore", style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold))
+                      : Text("vs", style: Theme.of(context).textTheme.headlineSmall),
+                  ),
+                  Expanded(
+                    child: _buildTeamDisplay(
+                      context,
+                      school: fixture.awaySchool,
+                      team: fixture.awayTeam,
+                      logoUrl: fixture.awayOrgLogo,
+                      alignment: CrossAxisAlignment.end,
+                    ),
+                  ),
+                ],
+              ),
               const Divider(height: 24),
-              _TeamVsWidget(fixture: fixture),
-              if (fixture.premier)
-                Align(
-                  alignment: Alignment.centerRight,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.calendar_today, size: 16, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(_formatDateTime(fixture.dateTime)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // --- MODIFIED ---
+              // The location is now always shown for both results and upcoming fixtures.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text(fixture.venue, textAlign: TextAlign.center)),
+                ],
+              ),
+               if (fixture.premier)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
                   child: Chip(
                     label: const Text('Premier'),
                     visualDensity: VisualDensity.compact,
@@ -427,43 +536,6 @@ class _DetailedFixtureCard extends StatelessWidget {
   }
 }
 
-class _TeamVsWidget extends StatelessWidget {
-  final Fixture fixture;
-  const _TeamVsWidget({required this.fixture});
-
-  Widget _buildTeamRow(BuildContext context, String school, String team, String? logoUrl) {
-    return Row(
-      children: [
-        if (logoUrl != null && logoUrl.isNotEmpty)
-          Image.network(
-            logoUrl,
-            width: 24,
-            height: 24,
-            errorBuilder: (context, error, stackTrace) => const Icon(Icons.shield, size: 24),
-          )
-        else
-          const Icon(Icons.shield, size: 24),
-        const SizedBox(width: 8),
-        Expanded(child: Text('$school: $team', style: Theme.of(context).textTheme.titleMedium)),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildTeamRow(context, fixture.homeSchool, fixture.homeTeam, fixture.homeOrgLogo),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
-          child: Text('vs'),
-        ),
-        _buildTeamRow(context, fixture.awaySchool, fixture.awayTeam, fixture.awayOrgLogo),
-      ],
-    );
-  }
-}
 
 extension StringExtension on String {
     String capitalize() {

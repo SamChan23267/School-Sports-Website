@@ -15,6 +15,7 @@ class ApiService {
 
   Map<String, dynamic>? _cachedMetadata;
   List<Fixture>? _cachedFixtures;
+  Map<String, dynamic>? _cachedPhases;
 
   static final List<String> _initialCompIdsPayload = [
     "10362", "10180", "10181", "10182", "10183", "10184", "10113", "10114", "10115", "10116", "10286", "10288", "10394", "10395", "10396", "10401", "10402", "10403", "10045", "10033", "10034", "10041", "11769", "11109", "11110", "11226", "11227", "10197", "10333", "10334", "10335", "10336", "10337", "10340", "10202", "10203", "10204", "10205", "10206", "10821", "9982", "9983", "9995", "9996", "9974", "9975", "9976", "9977", "9978", "9979", "9980", "9981", "10017", "10046", "10047", "10005", "10006", "10124", "10125", "10126", "10292", "10296", "11261", "10121", "10025", "10026", "10035", "10147", "10148", "10341", "10342", "10343", "10137", "10138", "10185", "10186", "10140", "10141", "10190", "10191", "10207", "10208", "10209", "10200", "10257", "10192", "10193", "10194", "10195", "10196", "10305"
@@ -43,16 +44,6 @@ class ApiService {
     } else {
       throw Exception('Failed to load competition metadata');
     }
-  }
-
-  Future<List<Sport>> getSports() async {
-    final metadata = await _getCompetitionMetadata();
-    final List<dynamic> sportsData = metadata['Sports'] ?? [];
-    
-    return sportsData
-        .map((s) => Sport.fromJson(s, _sportIcons[s['Name']] ?? _sportIcons['Default']!))
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
   }
 
   Future<List<Sport>> getSportsForSacredHeart() async {
@@ -133,7 +124,6 @@ class ApiService {
     }
   }
 
-  // --- NEW METHOD ---
   Future<List<Fixture>> getFixturesForTeam(String teamName) async {
     final allFixtures = await getFixtures(
       dateRange: DateTimeRange(
@@ -144,50 +134,61 @@ class ApiService {
     return allFixtures.where((f) => f.homeTeam == teamName || f.awayTeam == teamName).toList();
   }
 
-  // --- NEW METHOD ---
-  Future<List<StandingsTable>> getStandings(int gradeId) async {
-    // This is a mock implementation based on the provided JSON.
-    // In a real app, you would make an API call like:
-    // final response = await http.get(Uri.parse('.../standings/$gradeId'));
-    // For now, we'll simulate it.
-    
-    // This simulates finding the relevant competition and phase IDs.
-    // In a real app, this logic would be more robust.
-    final metadata = await _getCompetitionMetadata();
-    final grade = (metadata['GradesPerComp'] as Map<String, dynamic>)
-        .values
-        .expand((e) => e as List)
-        .firstWhere((g) => g['Id'] == gradeId, orElse: () => null);
+  Future<Map<String, dynamic>> _getAvailablePhases() async {
+    if (_cachedPhases != null) return _cachedPhases!;
 
-    if (grade == null) {
-      return []; // Grade not found
+    final payload = {
+      "CompIds": _initialCompIdsPayload.map(int.parse).toList()
+    };
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/standings/availablePhases'),
+      headers: _headers,
+      body: json.encode(payload),
+    );
+    if (response.statusCode == 200) {
+        _cachedPhases = json.decode(response.body);
+        return _cachedPhases!;
+    } else {
+        throw Exception('Failed to load available phases. Status: ${response.statusCode}');
+    }
+  }
+
+  // --- MODIFIED ---
+  // This method now uses the correct URL and payload format for fetching standings.
+  Future<List<StandingsTable>> getStandings(int competitionId, int gradeId) async {
+    final phasesData = await _getAvailablePhases();
+    final phasesForComp = phasesData[competitionId.toString()] as List<dynamic>?;
+
+    if (phasesForComp == null || phasesForComp.isEmpty) {
+      return [];
     }
 
-    // Mocking the API response based on standings_data.json
-    // This is a simplified example. A real implementation would need to fetch
-    // the correct data based on competition and phase.
-    const String standingsJson = '''
-    [
-      {
-        "GradeId": 712052,
-        "GradeName": "Premier League",
-        "SectionId": 180607,
-        "SectionName": "Premier League",
-        "Standings": [
-          {"Played": 10, "Win": 9, "Loss": 1, "Draw": 0, "Total": 27, "TeamName": "Sacred Heart College (Auckland) : 1st XI"},
-          {"Played": 10, "Win": 8, "Loss": 2, "Draw": 0, "Total": 24, "TeamName": "Auckland Grammar School : AGS 1st XI"},
-          {"Played": 10, "Win": 7, "Loss": 3, "Draw": 0, "Total": 21, "TeamName": "Westlake Boys High School : 1st XI"},
-          {"Played": 10, "Win": 6, "Loss": 4, "Draw": 0, "Total": 18, "TeamName": "Saint Kentigern College : 1st XI"},
-          {"Played": 10, "Win": 5, "Loss": 5, "Draw": 0, "Total": 15, "TeamName": "St Peter's College (Epsom) : 1st XI"},
-          {"Played": 10, "Win": 4, "Loss": 6, "Draw": 0, "Total": 12, "TeamName": "Mt Albert Grammar School : MAGS 1st XI"},
-          {"Played": 10, "Win": 3, "Loss": 7, "Draw": 0, "Total": 9, "TeamName": "Macleans College : 1st XI"},
-          {"Played": 10, "Win": 0, "Loss": 10, "Draw": 0, "Total": 0, "TeamName": "Selwyn College : 1st XI"}
-        ]
-      }
-    ]
-    ''';
+    final phaseId = phasesForComp.first['Id'];
 
-    final List<dynamic> decodedData = json.decode(standingsJson);
-    return decodedData.map((data) => StandingsTable.fromJson(data)).toList();
+    // The API expects a POST request with a specific payload.
+    final payload = {
+      "GradeId": gradeId,
+      "PhaseId": phaseId,
+    };
+
+    final response = await http.post( // Changed from GET to POST
+      Uri.parse('$_baseUrl/standings/Phase'), // Corrected URL
+      headers: _headers,
+      body: json.encode(payload), // Added the correct payload
+    );
+
+    if (response.statusCode == 200) {
+        final List<dynamic> decodedData = json.decode(response.body);
+        
+        // The API now returns only the relevant table, so no need to filter by GradeId.
+        final relevantTables = decodedData
+            .map((tableData) => StandingsTable.fromJson(tableData))
+            .toList();
+
+        return relevantTables;
+    } else {
+        throw Exception('Failed to load standings for grade $gradeId and phase $phaseId');
+    }
   }
 }

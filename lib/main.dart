@@ -56,8 +56,7 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-// --- NEW ENUM FOR NAVIGATION ---
-enum AppView { upcomingFixtures, selectTeam }
+enum AppView { upcomingFixtures, results, selectTeam }
 
 class LandingPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -74,21 +73,25 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  // State to manage the currently displayed view
   AppView _currentView = AppView.upcomingFixtures;
+
+  String get _currentViewTitle {
+    switch (_currentView) {
+      case AppView.upcomingFixtures:
+        return 'Upcoming Fixtures';
+      case AppView.results:
+        return 'Results';
+      case AppView.selectTeam:
+        return 'Select Team';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _currentView == AppView.upcomingFixtures 
-            ? 'Upcoming Fixtures' 
-            : 'Select Team',
-        ),
+        title: Text(_currentViewTitle),
         actions: [
-          // --- MODIFIED ---
-          // Added Contact Us and Login buttons back to the AppBar
           TextButton(
             onPressed: () {},
             style: TextButton.styleFrom(
@@ -147,7 +150,18 @@ class _LandingPageState extends State<LandingPage> {
                 setState(() {
                   _currentView = AppView.upcomingFixtures;
                 });
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.emoji_events),
+              title: const Text('Results'),
+              selected: _currentView == AppView.results,
+              onTap: () {
+                setState(() {
+                  _currentView = AppView.results;
+                });
+                Navigator.pop(context);
               },
             ),
             ListTile(
@@ -158,7 +172,7 @@ class _LandingPageState extends State<LandingPage> {
                 setState(() {
                   _currentView = AppView.selectTeam;
                 });
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
               },
             ),
           ],
@@ -168,19 +182,20 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  /// Builds the main content area based on the currently selected view.
   Widget _buildCurrentView() {
     Widget content;
     switch (_currentView) {
       case AppView.upcomingFixtures:
-        content = const UpcomingFixtureWidget();
+        content = const UpcomingFixtureWidget(isResultsView: false);
+        break;
+      case AppView.results:
+        content = const UpcomingFixtureWidget(isResultsView: true);
         break;
       case AppView.selectTeam:
         content = const SportsListColumn();
         break;
     }
 
-    // Center the content and constrain its width for a consistent look on larger screens.
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
@@ -234,12 +249,15 @@ class _SportsListColumnState extends State<SportsListColumn> {
     setState(() {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
-      _teamFixturesFuture!.then((fixtures) {
+      
+      _standingsFuture = _teamFixturesFuture!.then((fixtures) {
         if (fixtures.isNotEmpty) {
-          final gradeId = fixtures.first.gradeId;
-          setState(() {
-            _standingsFuture = _apiService.getStandings(gradeId);
-          });
+          final firstFixture = fixtures.first;
+          final competitionId = firstFixture.competitionId;
+          final gradeId = firstFixture.gradeId;
+          return _apiService.getStandings(competitionId, gradeId);
+        } else {
+          return <StandingsTable>[];
         }
       });
     });
@@ -513,7 +531,15 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading standings: ${snapshot.error}'));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Could not load standings data.\nPlease check the network connection and try again.\n\nError: ${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(child: Text('No standings available.'));
@@ -544,20 +570,34 @@ class _SportsListColumnState extends State<SportsListColumn> {
                         headingRowHeight: 40,
                         dataRowMinHeight: 35,
                         dataRowMaxHeight: 40,
+                        // --- MODIFIED ---
+                        // Added new columns to the standings table.
                         columns: const [
                           DataColumn(label: Text('Team')),
                           DataColumn(label: Text('P'), numeric: true),
                           DataColumn(label: Text('W'), numeric: true),
                           DataColumn(label: Text('L'), numeric: true),
                           DataColumn(label: Text('D'), numeric: true),
+                          DataColumn(label: Text('B'), numeric: true),
+                          DataColumn(label: Text('BP'), numeric: true),
+                          DataColumn(label: Text('PF'), numeric: true),
+                          DataColumn(label: Text('PA'), numeric: true),
+                          DataColumn(label: Text('GD'), numeric: true),
                           DataColumn(label: Text('Pts'), numeric: true),
                         ],
+                        // --- MODIFIED ---
+                        // Added new cells for the new data points.
                         rows: table.standings.map((s) => DataRow(cells: [
                           DataCell(Text(s.teamName)), 
                           DataCell(Text(s.played.toString())),
                           DataCell(Text(s.win.toString())),
                           DataCell(Text(s.loss.toString())),
                           DataCell(Text(s.draw.toString())),
+                          DataCell(Text(s.byes.toString())),
+                          DataCell(Text(s.bonus.toString())),
+                          DataCell(Text(s.pointsFor.toString())),
+                          DataCell(Text(s.pointsAgainst.toString())),
+                          DataCell(Text(s.differential.toString())),
                           DataCell(Text(s.total.toString())),
                         ])).toList(),
                       ),
@@ -577,6 +617,25 @@ class _SportsListColumnState extends State<SportsListColumn> {
 class _FixtureResultCard extends StatelessWidget {
   final Fixture fixture;
   const _FixtureResultCard({required this.fixture});
+
+  Widget _buildTeamDisplay(BuildContext context, String school, String team, {required CrossAxisAlignment alignment}) {
+    return Column(
+      crossAxisAlignment: alignment,
+      children: [
+        Text(
+          school,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          team,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -599,42 +658,58 @@ class _FixtureResultCard extends StatelessWidget {
               DateFormat('EEE, d MMM yy - hh:mm a').format(DateTime.parse(fixture.dateTime)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${fixture.homeSchool}: ${fixture.homeTeam}", style: Theme.of(context).textTheme.titleMedium),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Text('vs', style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.5)),
-                      ),
-                      Text("${fixture.awaySchool}: ${fixture.awayTeam}", style: Theme.of(context).textTheme.titleMedium),
-                    ],
+                  child: _buildTeamDisplay(
+                    context,
+                    fixture.homeSchool,
+                    fixture.homeTeam,
+                    alignment: CrossAxisAlignment.start,
                   ),
                 ),
-                if (isFinished)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16.0),
-                    child: Text(
-                      '$homeScore - $awayScore',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: scoreColor,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: isFinished 
+                    ? Text(
+                        '$homeScore - $awayScore',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: scoreColor),
+                      )
+                    : Text(
+                        'vs',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey),
                       ),
-                    ),
+                ),
+                Expanded(
+                  child: _buildTeamDisplay(
+                    context,
+                    fixture.awaySchool,
+                    fixture.awayTeam,
+                    alignment: CrossAxisAlignment.end,
                   ),
+                ),
               ],
             ),
             
             const SizedBox(height: 8),
-            if (!isFinished)
-              Text(fixture.venue, style: Theme.of(context).textTheme.bodySmall),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    fixture.venue,
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
