@@ -93,8 +93,6 @@ class _LandingPageState extends State<LandingPage> {
       appBar: AppBar(
         title: Text(_currentViewTitle),
         actions: [
-          // --- MODIFIED ---
-          // The Contact Us button now navigates to the new page.
           TextButton(
             onPressed: () {
               Navigator.push(
@@ -258,12 +256,17 @@ class _SportsListColumnState extends State<SportsListColumn> {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
       
+      // --- MODIFIED ---
+      // This now correctly passes the required IDs and the data source to the getStandings method.
       _standingsFuture = _teamFixturesFuture!.then((fixtures) {
         if (fixtures.isNotEmpty) {
           final firstFixture = fixtures.first;
           final competitionId = firstFixture.competitionId;
           final gradeId = firstFixture.gradeId;
-          return _apiService.getStandings(competitionId, gradeId);
+          final source = firstFixture.source;
+          
+          // GradeId can be null for Rugby Union, so we provide a default.
+          return _apiService.getStandings(competitionId, gradeId ?? 0, source);
         } else {
           return <StandingsTable>[];
         }

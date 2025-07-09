@@ -2,40 +2,44 @@
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_proxy/shelf_proxy.dart';
+import 'package:shelf_router/shelf_router.dart';
 
-// This is the server that will forward our requests.
 void main() async {
-  // 1. Define the middleware that adds CORS headers.
-  final corsMiddleware = const Pipeline().addMiddleware((innerHandler) {
-    return (req) async {
-      // Handle preflight (OPTIONS) requests, which are sent by browsers
-      // to check permissions before a "complex" request (like a POST with JSON).
-      if (req.method == 'OPTIONS') {
-        return Response.ok(null, headers: {
-          'Access-Control-Allow-Origin': '*', // Allow any origin
-          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Origin, Content-Type',
-        });
-      }
+  final app = Router();
 
-      // For actual requests, pass them through the proxy and add the
-      // 'Access-Control-Allow-Origin' header to the response.
-      final response = await innerHandler(req);
-      return response.change(headers: {'Access-Control-Allow-Origin': '*'});
-    };
-  });
+  // Route for CollegeSport requests
+  app.mount('/collegesport/', proxyHandler("https://www.collegesport.co.nz"));
 
-  // 2. Create the main handler for the proxy.
-  final handler = corsMiddleware.addHandler(
-    proxyHandler(Uri.parse("https://www.collegesport.co.nz")),
-  );
+  // Route for Auckland Rugby requests
+  app.mount('/aucklandrugby/', proxyHandler("https://www.aucklandrugby.co.nz"));
 
-  // 3. Serve the handler on localhost.
-  final server = await io.serve(
-    handler,
-    'localhost',
-    9999, // We'll run our proxy on port 9999
-  );
+  // Middleware to add CORS headers to every response
+  final handler = const Pipeline()
+      .addMiddleware(logRequests()) // Helpful for debugging
+      .addMiddleware(_corsMiddleware)
+      .addHandler(app);
 
-  print('CORS-Proxy server running on http://localhost:9999');
+  final server = await io.serve(handler, 'localhost', 9999);
+  print('CORS Proxy server running on http://localhost:${server.port}');
+  print('-> Forwarding /collegesport/ to https://www.collegesport.co.nz/');
+  print('-> Forwarding /aucklandrugby/ to https://www.aucklandrugby.co.nz/');
 }
+
+// Middleware handler to add CORS headers
+Middleware _corsMiddleware = (innerHandler) {
+  return (request) async {
+    // Handle pre-flight (OPTIONS) requests
+    if (request.method == 'OPTIONS') {
+      return Response.ok(null, headers: _corsHeaders);
+    }
+    // Handle actual requests
+    final response = await innerHandler(request);
+    return response.change(headers: {...response.headers, ..._corsHeaders});
+  };
+};
+
+const Map<String, String> _corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Origin, Content-Type',
+};

@@ -1,8 +1,10 @@
 // lib/models.dart
 
+enum DataSource { collegeSport, rugbyUnion }
+
 class Fixture {
-  final int competitionId; 
-  final int gradeId;
+  final String competitionId;
+  final int? gradeId;
   final String sport;
   final String competition;
   final String dateTime;
@@ -19,11 +21,11 @@ class Fixture {
   final String? homeScore;
   final String? awayScore;
   final int resultStatus;
-
+  final DataSource source;
 
   Fixture({
     required this.competitionId,
-    required this.gradeId,
+    this.gradeId,
     required this.sport,
     required this.competition,
     required this.dateTime,
@@ -40,9 +42,10 @@ class Fixture {
     this.homeScore,
     this.awayScore,
     required this.resultStatus,
+    required this.source,
   });
 
-  factory Fixture.fromJson(Map<String, dynamic> json, Map<String, dynamic> metadata) {
+  factory Fixture.fromCollegeSportJson(Map<String, dynamic> json, Map<String, dynamic> metadata) {
     final int sportId = json['SportId'] ?? 0;
     final sports = metadata['Sports'] as List<dynamic>;
     final sportMeta = sports.firstWhere(
@@ -59,7 +62,6 @@ class Fixture {
         .where((part) => part.isNotEmpty && part != "N/A")
         .toList();
     final fullCompetitionName = competitionParts.join(' - ');
-
 
     final homeTeamName = json['HomeTeamName'] ?? 'TBC';
     final awayTeamName = json['AwayTeamName'] ?? 'TBC';
@@ -79,7 +81,7 @@ class Fixture {
     }
 
     return Fixture(
-      competitionId: json['CompId'] ?? 0,
+      competitionId: (json['CompId'] ?? 0).toString(),
       gradeId: json['GradeId'] ?? 0,
       sport: sportName,
       competition: fullCompetitionName.isNotEmpty ? fullCompetitionName : "Competition details not available",
@@ -97,6 +99,46 @@ class Fixture {
       homeScore: json['HomeScore'],
       awayScore: json['AwayScore'],
       resultStatus: json['ResultStatus'] ?? 0,
+      source: DataSource.collegeSport,
+    );
+  }
+
+  factory Fixture.fromRugbyUnionJson(Map<String, dynamic> json) {
+    const String sacredHeartName = "Sacred Heart College";
+    final homeTeamName = json['homeTeam']?['name'] ?? 'TBC';
+    final awayTeamName = json['awayTeam']?['name'] ?? 'TBC';
+
+    String homeSchool = homeTeamName;
+    String awaySchool = awayTeamName;
+    if (homeTeamName.contains(sacredHeartName)) {
+        homeSchool = sacredHeartName;
+    }
+    if (awayTeamName.contains(sacredHeartName)) {
+        awaySchool = sacredHeartName;
+    }
+    
+    final bool isPremier = (json['compName'] as String? ?? '').toLowerCase().contains('1a');
+
+    return Fixture(
+      competitionId: json['compId'] ?? '',
+      gradeId: null,
+      sport: 'Rugby Union',
+      competition: json['compName'] ?? 'Competition details not available',
+      dateTime: json['dateTime'] ?? '',
+      venue: json['venue'] ?? 'TBC',
+      homeTeam: homeTeamName,
+      awayTeam: awayTeamName,
+      homeSchool: homeSchool,
+      awaySchool: awaySchool,
+      homeOrgLogo: json['homeTeam']?['crest'],
+      awayOrgLogo: json['awayTeam']?['crest'],
+      premier: isPremier,
+      lat: null,
+      lng: null,
+      homeScore: json['homeTeam']?['score']?.toString(),
+      awayScore: json['awayTeam']?['score']?.toString(),
+      resultStatus: json['status'] == 'Result' ? 1 : 0,
+      source: DataSource.rugbyUnion,
     );
   }
 }
@@ -105,16 +147,9 @@ class Sport {
   final int id;
   final String name;
   final String icon;
+  final DataSource source;
 
-  Sport({required this.id, required this.name, required this.icon});
-
-  factory Sport.fromJson(Map<String, dynamic> json, String icon) {
-    return Sport(
-      id: json['Id'],
-      name: json['Name'],
-      icon: icon,
-    );
-  }
+  Sport({required this.id, required this.name, required this.icon, required this.source});
 }
 
 class StandingsTable {
@@ -128,13 +163,32 @@ class StandingsTable {
     required this.standings,
   });
 
-  factory StandingsTable.fromJson(Map<String, dynamic> json) {
+  factory StandingsTable.fromCollegeSportJson(Map<String, dynamic> json) {
     var standingsList = json['Standings'] as List;
-    List<Standing> standings = standingsList.map((i) => Standing.fromJson(i)).toList();
+    List<Standing> standings = standingsList.map((i) => Standing.fromCollegeSportJson(i)).toList();
     return StandingsTable(
-      gradeName: json['GradeName'],
-      sectionName: json['SectionName'],
+      gradeName: json['GradeName'] ?? '',
+      sectionName: json['SectionName'] ?? 'Standings',
       standings: standings,
+    );
+  }
+
+  factory StandingsTable.fromRugbyUnionJson(Map<String, dynamic> json) {
+    List<Standing> allStandings = [];
+    if (json['ladderPools'] != null) {
+      for (var pool in json['ladderPools']) {
+        if (pool['teams'] != null) {
+          var teamsList = pool['teams'] as List;
+          allStandings.addAll(teamsList.map((i) => Standing.fromRugbyUnionJson(i)));
+        }
+      }
+    }
+    allStandings.sort((a, b) => a.position.compareTo(b.position));
+
+    return StandingsTable(
+      gradeName: '',
+      sectionName: json['ladderPools']?[0]?['poolName'] ?? 'Standings',
+      standings: allStandings,
     );
   }
 }
@@ -152,6 +206,7 @@ class Standing {
   final int pointsAgainst;
   final int differential;
   final int total;
+  final int position;
 
   Standing({
     required this.teamName,
@@ -165,11 +220,12 @@ class Standing {
     required this.pointsAgainst,
     required this.differential,
     required this.total,
+    required this.position,
   });
 
-  factory Standing.fromJson(Map<String, dynamic> json) {
+  factory Standing.fromCollegeSportJson(Map<String, dynamic> json) {
     return Standing(
-      teamName: json['TeamName'],
+      teamName: json['TeamName'] ?? '',
       played: json['Played'] ?? 0,
       win: json['Win'] ?? 0,
       loss: json['Loss'] ?? 0,
@@ -180,6 +236,24 @@ class Standing {
       pointsAgainst: json['Against'] ?? 0,
       differential: json['Differential'] ?? 0,
       total: json['Total'] ?? 0,
+      position: json['Position'] ?? 0,
+    );
+  }
+
+  factory Standing.fromRugbyUnionJson(Map<String, dynamic> json) {
+    return Standing(
+      teamName: json['name'] ?? '',
+      played: json['matchesPlayed'] ?? 0,
+      win: json['matchesWon'] ?? 0,
+      loss: json['matchesLost'] ?? 0,
+      draw: json['matchesDrawn'] ?? 0,
+      byes: json['byes'] ?? 0,
+      bonus: json['totalBonusPoints'] ?? 0,
+      pointsFor: json['pointsFor'] ?? 0,
+      pointsAgainst: json['pointsAgainst'] ?? 0,
+      differential: json['pointsDifference'] ?? 0,
+      total: json['totalMatchPoints'] ?? 0,
+      position: json['position'] ?? 0,
     );
   }
 }

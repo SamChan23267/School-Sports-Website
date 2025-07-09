@@ -169,8 +169,8 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.start ?? DateTime.now(),
-                                firstDate: widget.isResultsView ? DateTime(2020) : DateTime.now(),
-                                lastDate: widget.isResultsView ? DateTime.now() : DateTime.now().add(const Duration(days: 365)),
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
@@ -192,8 +192,8 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _filters.dateRange?.end ?? DateTime.now(),
-                                firstDate: _filters.dateRange?.start ?? (widget.isResultsView ? DateTime(2020) : DateTime.now()),
-                                lastDate: widget.isResultsView ? DateTime.now() : DateTime.now().add(const Duration(days: 365)),
+                                firstDate: _filters.dateRange?.start ?? DateTime(2020),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
                               );
                               if (picked != null) {
                                 setDialogState(() {
@@ -219,7 +219,9 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 ),
                 TextButton(
                   onPressed: () {
-                    _fetchFixtures();
+                    // Re-fetch with new date range, then filter client-side
+                    _fetchFixtures(); 
+                    setState((){}); // Apply client-side filters immediately
                     Navigator.of(context).pop();
                   },
                   child: const Text('Apply'),
@@ -250,8 +252,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 },
                 tooltip: 'Filter Fixtures',
               ),
-              // --- MODIFIED ---
-              // The compact view toggle is now always shown.
               IconButton(
                 icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),
                 onPressed: () {
@@ -281,12 +281,16 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
               }
 
               final filteredFixtures = _allFixtures.where((f) {
-                final premierMatch = _filters.team != null || _filters.premierStatus == PremierStatus.all || f.premier;
+                final premierMatch = _filters.premierStatus == PremierStatus.all || f.premier;
                 final sportMatch = _filters.sport == null || f.sport == _filters.sport;
                 final teamMatch = _filters.team == null || f.homeTeam == _filters.team || f.awayTeam == _filters.team;
-                final locationMatch = _filters.locationStatus == LocationStatus.all ||
-                                      (_filters.locationStatus == LocationStatus.home && f.venue.toLowerCase().contains("sacred heart")) ||
-                                      (_filters.locationStatus == LocationStatus.away && !f.venue.toLowerCase().contains("sacred heart"));
+                
+                bool locationMatch = true;
+                if (f.source == DataSource.collegeSport) {
+                    locationMatch = _filters.locationStatus == LocationStatus.all ||
+                                (_filters.locationStatus == LocationStatus.home && f.venue.toLowerCase().contains("sacred heart")) ||
+                                (_filters.locationStatus == LocationStatus.away && !f.venue.toLowerCase().contains("sacred heart"));
+                }
                 
                 final bool hasScore = (f.homeScore != null && f.homeScore!.isNotEmpty) || (f.awayScore != null && f.awayScore!.isNotEmpty);
                 final bool isFinished = hasScore || f.resultStatus != 0;
@@ -299,7 +303,13 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                  return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('No fixtures match the current filters.', textAlign: TextAlign.center)));
               }
 
-              filteredFixtures.sort((a, b) => DateTime.parse(b.dateTime).compareTo(DateTime.parse(a.dateTime)));
+              filteredFixtures.sort((a, b) {
+                  try {
+                    return DateTime.parse(b.dateTime).compareTo(DateTime.parse(a.dateTime));
+                  } catch (e) {
+                    return 0;
+                  }
+              });
 
               return ListView.builder(
                 itemCount: filteredFixtures.length,
@@ -320,8 +330,6 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
 
 class _CompactFixtureCard extends StatelessWidget {
   final Fixture fixture;
-  // --- NEW ---
-  // Flag to determine if the card should display a result.
   final bool isResult;
   const _CompactFixtureCard({required this.fixture, required this.isResult});
 
@@ -372,8 +380,6 @@ class _CompactFixtureCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              // --- MODIFIED ---
-              // Show score for results, otherwise show date/time.
               isResult
                 ? Text(
                     '$homeScore - $awayScore',
@@ -508,8 +514,6 @@ class _DetailedFixtureCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // --- MODIFIED ---
-              // The location is now always shown for both results and upcoming fixtures.
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
