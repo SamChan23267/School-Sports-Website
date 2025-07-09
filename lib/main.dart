@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'upcoming_fixture_widget.dart';
 import 'api_service.dart';
 import 'models.dart';
-import 'contact_us_page.dart'; // Import the new contact page
+import 'contact_us_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -256,8 +256,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
       
-      // --- MODIFIED ---
-      // This now correctly passes the required IDs and the data source to the getStandings method.
       _standingsFuture = _teamFixturesFuture!.then((fixtures) {
         if (fixtures.isNotEmpty) {
           final firstFixture = fixtures.first;
@@ -265,7 +263,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
           final gradeId = firstFixture.gradeId;
           final source = firstFixture.source;
           
-          // GradeId can be null for Rugby Union, so we provide a default.
           return _apiService.getStandings(competitionId, gradeId ?? 0, source);
         } else {
           return <StandingsTable>[];

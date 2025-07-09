@@ -3,7 +3,7 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'models.dart';
+import 'models.dart'; // Only imports models, does not define them.
 
 class ApiService {
   // --- Headers ---
@@ -205,7 +205,6 @@ class ApiService {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final body = response.body;
-        // Use a regex to find the buildId from the __NEXT_DATA__ script tag
         final pattern = RegExp(r'"buildId":"([^"]+)"');
         final match = pattern.firstMatch(body);
         if (match != null && match.group(1) != null) {
@@ -217,7 +216,6 @@ class ApiService {
       throw Exception('Failed to find Rugby Union buildId in HTML response.');
     } catch (e) {
       print('Error fetching Rugby Union build ID: $e');
-      // Fallback to the last known working ID as a last resort
       return 'EYwFsoHsI7WQjAopi5hIv';
     }
   }

@@ -98,8 +98,8 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
           builder: (BuildContext context, StateSetter setDialogState) {
             
             final sacredHeartTeams = _allFixtures
-                .where((f) => _filters.sport == null || f.sport == _filters.sport)
-                .map((f) => f.homeSchool == "Sacred Heart College (Auckland)" ? f.homeTeam : f.awayTeam)
+                .where((f) => (_filters.sport == null || f.sport == _filters.sport) && (f.homeSchool.contains("Sacred Heart College") || f.awaySchool.contains("Sacred Heart College")))
+                .map((f) => f.homeSchool.contains("Sacred Heart College") ? f.homeTeam : f.awayTeam)
                 .toSet().toList()..sort();
 
             return AlertDialog(
@@ -219,9 +219,8 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                 ),
                 TextButton(
                   onPressed: () {
-                    // Re-fetch with new date range, then filter client-side
                     _fetchFixtures(); 
-                    setState((){}); // Apply client-side filters immediately
+                    setState((){});
                     Navigator.of(context).pop();
                   },
                   child: const Text('Apply'),
@@ -346,8 +345,8 @@ class _CompactFixtureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const String ourSchool = "Sacred Heart College (Auckland)";
-    final ourTeam = fixture.homeSchool == ourSchool ? fixture.homeTeam : fixture.awayTeam;
-    final opponentSchool = fixture.homeSchool == ourSchool ? fixture.awaySchool : fixture.homeSchool;
+    final ourTeam = fixture.homeSchool.contains("Sacred Heart College") ? fixture.homeTeam : fixture.awayTeam;
+    final opponentSchool = fixture.homeSchool.contains("Sacred Heart College") ? fixture.awaySchool : fixture.homeSchool;
     final homeScore = fixture.homeScore ?? '-';
     final awayScore = fixture.awayScore ?? '-';
 
