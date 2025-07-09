@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'upcoming_fixture_widget.dart';
 import 'api_service.dart';
 import 'models.dart';
+import 'contact_us_page.dart'; // Import the new contact page
 
 void main() {
   runApp(const MyApp());
@@ -92,8 +93,15 @@ class _LandingPageState extends State<LandingPage> {
       appBar: AppBar(
         title: Text(_currentViewTitle),
         actions: [
+          // --- MODIFIED ---
+          // The Contact Us button now navigates to the new page.
           TextButton(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ContactUsPage()),
+              );
+            },
             style: TextButton.styleFrom(
               foregroundColor: Colors.white,
             ),
@@ -570,8 +578,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
                         headingRowHeight: 40,
                         dataRowMinHeight: 35,
                         dataRowMaxHeight: 40,
-                        // --- MODIFIED ---
-                        // Added new columns to the standings table.
                         columns: const [
                           DataColumn(label: Text('Team')),
                           DataColumn(label: Text('P'), numeric: true),
@@ -585,8 +591,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
                           DataColumn(label: Text('GD'), numeric: true),
                           DataColumn(label: Text('Pts'), numeric: true),
                         ],
-                        // --- MODIFIED ---
-                        // Added new cells for the new data points.
                         rows: table.standings.map((s) => DataRow(cells: [
                           DataCell(Text(s.teamName)), 
                           DataCell(Text(s.played.toString())),
