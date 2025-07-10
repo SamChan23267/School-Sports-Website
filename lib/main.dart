@@ -251,10 +251,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
     });
   }
 
-  void _onTeamSelected(String teamName) {
+  void _onTeamSelected(String teamName, String sportName) {
     setState(() {
       _selectedTeam = teamName;
-      _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
+      _teamFixturesFuture = _apiService.getFixturesForTeam(teamName, sportName);
       
       _standingsFuture = _teamFixturesFuture!.then((fixtures) {
         if (fixtures.isNotEmpty) {
@@ -450,7 +450,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () => _onTeamSelected(teamName),
+                onPressed: () => _onTeamSelected(teamName, _selectedSport!),
                 child: Text(teamName, textAlign: TextAlign.center),
               ),
             );
@@ -623,15 +623,18 @@ class _FixtureResultCard extends StatelessWidget {
   const _FixtureResultCard({required this.fixture});
 
   Widget _buildTeamDisplay(BuildContext context, String school, String team, {required CrossAxisAlignment alignment}) {
+    final bool isCricket = fixture.source == DataSource.playHQ;
+
     return Column(
       crossAxisAlignment: alignment,
       children: [
-        Text(
-          school,
-          style: Theme.of(context).textTheme.bodySmall,
-          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
-        ),
-        const SizedBox(height: 2),
+        if (!isCricket)
+          Text(
+            school,
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+          ),
+        if (!isCricket) const SizedBox(height: 2),
         Text(
           team,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
