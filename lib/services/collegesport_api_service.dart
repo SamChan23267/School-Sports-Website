@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models.dart';
+import '../api_exception.dart';
 
 class CollegeSportApiService {
   static final CollegeSportApiService _instance = CollegeSportApiService._internal();
@@ -22,26 +23,26 @@ class CollegeSportApiService {
   List<Fixture>? _cachedFixtures;
 
   Future<List<Fixture>> getFixtures({DateTimeRange? dateRange}) async {
-    if (_cachedFixtures != null && dateRange == null) {
-      return _cachedFixtures!;
-    }
-
-    final metadata = await _getMetadata();
-    if (metadata['Competitions'].isEmpty) return [];
-
-    final allCompIds = (metadata['Competitions'] as List).map<int>((c) => c['Id']).toList();
-    final allGradeIds = (metadata['GradesPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((g) => g['Id'] as int).toSet().toList();
-    final allOrgIds = (metadata['OrgsPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((o) => o['Id'] as int).toSet().toList();
-
-    final fromDate = (dateRange?.start ?? DateTime.now().subtract(const Duration(days: 30))).toIso8601String().substring(0, 10);
-    final toDate = (dateRange?.end ?? DateTime.now().add(const Duration(days: 30))).toIso8601String().substring(0, 10);
-
-    final payload = {
-      "CompIds": allCompIds, "OrgIds": allOrgIds, "GradeIds": allGradeIds,
-      "From": "${fromDate}T00:00:00", "To": "${toDate}T23:59:00"
-    };
-
     try {
+      if (_cachedFixtures != null && dateRange == null) {
+        return _cachedFixtures!;
+      }
+
+      final metadata = await _getMetadata();
+      if (metadata['Competitions'].isEmpty) return [];
+
+      final allCompIds = (metadata['Competitions'] as List).map<int>((c) => c['Id']).toList();
+      final allGradeIds = (metadata['GradesPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((g) => g['Id'] as int).toSet().toList();
+      final allOrgIds = (metadata['OrgsPerComp'].values as Iterable).expand<dynamic>((e) => e as List).map<int>((o) => o['Id'] as int).toSet().toList();
+
+      final fromDate = (dateRange?.start ?? DateTime.now().subtract(const Duration(days: 30))).toIso8601String().substring(0, 10);
+      final toDate = (dateRange?.end ?? DateTime.now().add(const Duration(days: 30))).toIso8601String().substring(0, 10);
+
+      final payload = {
+        "CompIds": allCompIds, "OrgIds": allOrgIds, "GradeIds": allGradeIds,
+        "From": "${fromDate}T00:00:00", "To": "${toDate}T23:59:00"
+      };
+
       final response = await http.post(
         Uri.parse('$_collegeSportBaseUrl/fixture/Dates'),
         headers: _headers,
@@ -62,11 +63,13 @@ class CollegeSportApiService {
 
         if (dateRange == null) _cachedFixtures = fixtures;
         return fixtures;
+      } else {
+        throw http.ClientException('Failed to load fixtures with status code: ${response.statusCode}');
       }
     } catch (e) {
       print("CollegeSport Fixtures Error: $e");
+      throw ApiException('Could not load CollegeSport fixtures. Please check your connection.');
     }
-    return [];
   }
 
   Future<List<StandingsTable>> getStandings(int competitionId, int gradeId) async {
@@ -90,11 +93,13 @@ class CollegeSportApiService {
       if (response.statusCode == 200) {
         final List<dynamic> decodedData = json.decode(response.body);
         return decodedData.map((tableData) => StandingsTable.fromCollegeSportJson(tableData)).toList();
+      } else {
+         throw http.ClientException('Failed to load standings with status code: ${response.statusCode}');
       }
     } catch (e) {
       print("CollegeSport Standings Error: $e");
+      throw ApiException('Could not load CollegeSport standings. Please check your connection.');
     }
-    return [];
   }
 
   Future<Map<String, dynamic>> _getMetadata() async {
@@ -102,19 +107,15 @@ class CollegeSportApiService {
 
     final payload = [ "10362", "10180", "10181", "10182", "10183", "10184", "10113", "10114", "10115", "10116", "10286", "10288", "10394", "10395", "10396", "10401", "10402", "10403", "10045", "10033", "10034", "10041", "11769", "11109", "11110", "11226", "11227", "10197", "10333", "10334", "10335", "10336", "10337", "10340", "10202", "10203", "10204", "10205", "10206", "10821", "9982", "9983", "9995", "9996", "9974", "9975", "9976", "9977", "9978", "9979", "9980", "9981", "10017", "10046", "10047", "10005", "10006", "10124", "10125", "10126", "10292", "10296", "11261", "10121", "10025", "10026", "10035", "10147", "10148", "10341", "10342", "10343", "10137", "10138", "10185", "10186", "10140", "10141", "10190", "10191", "10207", "10208", "10209", "10200", "10257", "10192", "10193", "10194", "10195", "10196", "10305" ];
     
-    try {
-      final response = await http.post(
-        Uri.parse('$_collegeSportBaseUrl/metadata/'),
-        headers: _headers,
-        body: json.encode(payload),
-      );
-      if (response.statusCode == 200) {
-        _cachedMetadata = json.decode(response.body);
-        return _cachedMetadata!;
-      }
-    } catch (e) {
-      print("CollegeSport Metadata Error: $e");
+    final response = await http.post(
+      Uri.parse('$_collegeSportBaseUrl/metadata/'),
+      headers: _headers,
+      body: json.encode(payload),
+    );
+    if (response.statusCode == 200) {
+      _cachedMetadata = json.decode(response.body);
+      return _cachedMetadata!;
     }
-    return {'Sports': [], 'Competitions': [], 'GradesPerComp': {}, 'OrgsPerComp': {}};
+    throw http.ClientException('Failed to load CollegeSport metadata.');
   }
 }

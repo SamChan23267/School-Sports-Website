@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models.dart';
+import '../api_exception.dart';
 
 class RugbyUnionApiService {
   static final RugbyUnionApiService _instance = RugbyUnionApiService._internal();
@@ -22,13 +23,13 @@ class RugbyUnionApiService {
   String? _cachedRugbyBuildId;
 
   Future<List<Fixture>> getFixtures({DateTimeRange? dateRange}) async {
-    final sacredHeartEntityId = await _getSacredHeartEntityId();
-    if (sacredHeartEntityId == null) return [];
-
-    final fixturesPayload = _getFixturesPayload(sacredHeartEntityId, "fixtures");
-    final resultsPayload = _getFixturesPayload(sacredHeartEntityId, "results");
-
     try {
+      final sacredHeartEntityId = await _getSacredHeartEntityId();
+      if (sacredHeartEntityId == null) return [];
+
+      final fixturesPayload = _getFixturesPayload(sacredHeartEntityId, "fixtures");
+      final resultsPayload = _getFixturesPayload(sacredHeartEntityId, "results");
+
       final responses = await Future.wait([
         http.post(Uri.parse(_rugbyUnionApiUrl), headers: _headers, body: json.encode(fixturesPayload)),
         http.post(Uri.parse(_rugbyUnionApiUrl), headers: _headers, body: json.encode(resultsPayload)),
@@ -56,19 +57,19 @@ class RugbyUnionApiService {
 
       if (dateRange != null) {
         return allRugbyFixtures.where((f) {
+          if (f.dateTime.isEmpty) return false;
           try {
             final fixtureDate = DateTime.parse(f.dateTime);
-            return fixtureDate.isAfter(dateRange.start.subtract(const Duration(days: 1))) && fixtureDate.isBefore(dateRange.end.add(const Duration(days: 1)));
+            return !fixtureDate.isBefore(dateRange.start) && !fixtureDate.isAfter(dateRange.end);
           } catch(e) { return false; }
         }).toList();
       }
       
       return allRugbyFixtures;
-
     } catch (e) {
       print("Rugby Union Fixtures Error: $e");
+      throw ApiException('Could not load Rugby Union fixtures. Please check your connection.');
     }
-    return [];
   }
 
   Future<List<StandingsTable>> getStandings(String competitionId) async {
@@ -91,9 +92,12 @@ class RugbyUnionApiService {
         if (ladderData != null) {
           return [StandingsTable.fromRugbyUnionJson(ladderData)];
         }
+      } else {
+        throw http.ClientException('Failed to load standings with status code: ${response.statusCode}');
       }
     } catch (e) {
       print("Rugby Union Standings Error: $e");
+      throw ApiException('Could not load Rugby Union standings. Please check your connection.');
     }
     return [];
   }
@@ -125,24 +129,21 @@ class RugbyUnionApiService {
       throw Exception('Failed to find Rugby Union buildId in HTML response.');
     } catch (e) {
       print('Error fetching Rugby Union build ID: $e');
-      return 'EYwFsoHsI7WQjAopi5hIv'; // Fallback to last known working ID
+      return 'EYwFsoHsI7WQjAopi5hIv'; // Fallback
     }
   }
 
   Future<Map<String, dynamic>> _getRugbyUnionData() async {
     if (_cachedRugbyUnionData != null) return _cachedRugbyUnionData!;
-    try {
-      final buildId = await _getRugbyUnionBuildId();
-      final rugbyUnionDataUrl = "$_proxyBaseUrl/aucklandrugby/_next/data/$buildId/fixtures-results.json";
-      final response = await http.get(Uri.parse(rugbyUnionDataUrl));
-      if (response.statusCode == 200) {
-        _cachedRugbyUnionData = json.decode(response.body);
-        return _cachedRugbyUnionData!;
-      }
-    } catch (e) {
-      print("Rugby Union Data Error: $e");
+    
+    final buildId = await _getRugbyUnionBuildId();
+    final rugbyUnionDataUrl = "$_proxyBaseUrl/aucklandrugby/_next/data/$buildId/fixtures-results.json";
+    final response = await http.get(Uri.parse(rugbyUnionDataUrl));
+    if (response.statusCode == 200) {
+      _cachedRugbyUnionData = json.decode(response.body);
+      return _cachedRugbyUnionData!;
     }
-    return {'pageProps': {'competitions': [], 'clubs': []}};
+    throw http.ClientException('Failed to fetch Rugby Union data.');
   }
 
   Map<String, dynamic> _getFixturesPayload(int entityId, String type) {
