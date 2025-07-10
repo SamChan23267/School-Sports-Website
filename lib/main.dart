@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'upcoming_fixture_widget.dart';
 import 'api_service.dart';
 import 'models.dart';
-import 'contact_us_page.dart'; // Import the new contact page
+import 'contact_us_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -93,8 +93,6 @@ class _LandingPageState extends State<LandingPage> {
       appBar: AppBar(
         title: Text(_currentViewTitle),
         actions: [
-          // --- MODIFIED ---
-          // The Contact Us button now navigates to the new page.
           TextButton(
             onPressed: () {
               Navigator.push(
@@ -263,7 +261,9 @@ class _SportsListColumnState extends State<SportsListColumn> {
           final firstFixture = fixtures.first;
           final competitionId = firstFixture.competitionId;
           final gradeId = firstFixture.gradeId;
-          return _apiService.getStandings(competitionId, gradeId);
+          final source = firstFixture.source;
+          
+          return _apiService.getStandings(competitionId, gradeId ?? 0, source);
         } else {
           return <StandingsTable>[];
         }

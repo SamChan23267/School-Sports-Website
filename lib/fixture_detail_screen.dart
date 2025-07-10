@@ -5,12 +5,71 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'models.dart';
 
-class FixtureDetailScreen extends StatelessWidget {
+class FixtureDetailScreen extends StatefulWidget {
   final Fixture fixture;
 
   const FixtureDetailScreen({super.key, required this.fixture});
+
+  @override
+  State<FixtureDetailScreen> createState() => _FixtureDetailScreenState();
+}
+
+class _FixtureDetailScreenState extends State<FixtureDetailScreen> {
+  LatLng? _coordinates;
+  bool _isLoadingMap = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fixture.lat != null && widget.fixture.lng != null) {
+      _coordinates = LatLng(widget.fixture.lat!, widget.fixture.lng!);
+    } 
+    else if (widget.fixture.source == DataSource.rugbyUnion && widget.fixture.venue.isNotEmpty) {
+      _fetchCoordinatesForVenue();
+    }
+  }
+
+  String get _cleanedVenueName {
+    return widget.fixture.venue.replaceAll(RegExp(r'\s+\d+\s*\w?$'), '').trim();
+  }
+
+  Future<void> _fetchCoordinatesForVenue() async {
+    setState(() {
+      _isLoadingMap = true;
+    });
+
+    final query = Uri.encodeComponent(_cleanedVenueName);
+    // Use API parameters to restrict the search to NZ and bias it towards the Auckland region for better accuracy.
+    const aucklandViewbox = '174.45,-37.2,175.15,-36.5'; // A rough bounding box for the Auckland area
+    final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1&countrycodes=nz&viewbox=$aucklandViewbox&bounded=1');
+
+    try {
+      final response = await http.get(url, headers: {'User-Agent': 'Flutter Sports Fixtures App'});
+      if (response.statusCode == 200) {
+        final results = json.decode(response.body) as List;
+        if (results.isNotEmpty) {
+          final firstResult = results.first;
+          final lat = double.tryParse(firstResult['lat']);
+          final lon = double.tryParse(firstResult['lon']);
+          if (lat != null && lon != null) {
+            setState(() {
+              _coordinates = LatLng(lat, lon);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('Failed to fetch coordinates: $e');
+    } finally {
+      setState(() {
+        _isLoadingMap = false;
+      });
+    }
+  }
 
   String _formatDateTime(String dateTimeString) {
     if (dateTimeString.isEmpty) return 'Date TBC';
@@ -22,8 +81,14 @@ class FixtureDetailScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _launchMapsUrl(double lat, double lng) async {
-    final Uri url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+  Future<void> _launchMapsUrl() async {
+    Uri url;
+    if (_coordinates != null) {
+      url = Uri.parse('https://www.google.com/maps/search/?api=1&query=${_coordinates!.latitude},${_coordinates!.longitude}');
+    } else {
+      url = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(_cleanedVenueName)}, Auckland');
+    }
+    
     if (!await launchUrl(url)) {
       throw Exception('Could not launch $url');
     }
@@ -33,7 +98,7 @@ class FixtureDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(fixture.sport),
+        title: Text(widget.fixture.sport),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -48,7 +113,6 @@ class FixtureDetailScreen extends StatelessWidget {
   }
 
   Widget _buildNarrowLayout(BuildContext context) {
-    final hasLocation = fixture.lat != null && fixture.lng != null;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -56,13 +120,13 @@ class FixtureDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              fixture.competition,
+              widget.fixture.competition,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 24),
-            _TeamVsWidget(fixture: fixture),
+            _TeamVsWidget(fixture: widget.fixture),
             const SizedBox(height: 16),
-            if (fixture.premier)
+            if (widget.fixture.premier)
               Chip(
                 label: const Text('Premier'),
                 backgroundColor:
@@ -76,15 +140,15 @@ class FixtureDetailScreen extends StatelessWidget {
             const SizedBox(height: 8),
             SizedBox(
               height: 300,
-              child: _buildMap(hasLocation),
+              child: _buildMap(),
             ),
             const SizedBox(height: 16),
-            if (hasLocation)
+            if (widget.fixture.venue.isNotEmpty)
               Center(
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.directions),
                   label: const Text('Get Directions'),
-                  onPressed: () => _launchMapsUrl(fixture.lat!, fixture.lng!),
+                  onPressed: _launchMapsUrl,
                   style: ElevatedButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     backgroundColor: Theme.of(context).colorScheme.primary,
@@ -98,7 +162,6 @@ class FixtureDetailScreen extends StatelessWidget {
   }
 
   Widget _buildWideLayout(BuildContext context) {
-    final hasLocation = fixture.lat != null && fixture.lng != null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
       child: Row(
@@ -111,7 +174,7 @@ class FixtureDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    fixture.competition,
+                    widget.fixture.competition,
                     style: Theme.of(context)
                         .textTheme
                         .headlineMedium
@@ -119,12 +182,12 @@ class FixtureDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 32),
                   _TeamVsWidget(
-                    fixture: fixture,
+                    fixture: widget.fixture,
                     iconSize: 40,
                     textStyle: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
-                  if (fixture.premier)
+                  if (widget.fixture.premier)
                     Chip(
                       label: const Text('Premier'),
                       visualDensity: VisualDensity.compact,
@@ -150,15 +213,15 @@ class FixtureDetailScreen extends StatelessWidget {
                 Text("Location Map", style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: _buildMap(hasLocation),
+                  child: _buildMap(),
                 ),
                 const SizedBox(height: 16),
-                if (hasLocation)
+                if (widget.fixture.venue.isNotEmpty)
                   Center(
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.directions),
                       label: const Text('Get Directions'),
-                      onPressed: () => _launchMapsUrl(fixture.lat!, fixture.lng!),
+                      onPressed: _launchMapsUrl,
                       style: ElevatedButton.styleFrom(
                         foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -191,7 +254,7 @@ class FixtureDetailScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  _formatDateTime(fixture.dateTime),
+                  _formatDateTime(widget.fixture.dateTime),
                   style: textStyle,
                 ),
               ),
@@ -202,7 +265,7 @@ class FixtureDetailScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  fixture.venue,
+                  widget.fixture.venue,
                   style: textStyle,
                 ),
               ),
@@ -213,37 +276,39 @@ class FixtureDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMap(bool hasLocation) {
+  Widget _buildMap() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: hasLocation
-          ? FlutterMap(
-              options: MapOptions(
-                initialCenter: LatLng(fixture.lat!, fixture.lng!),
-                initialZoom: 15.0,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.app',
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: LatLng(fixture.lat!, fixture.lng!),
-                      width: 80,
-                      height: 80,
-                      child: Icon(Icons.location_pin,
-                          size: 40, color: Colors.red.shade700),
+      child: Container(
+        color: Colors.grey.withOpacity(0.2),
+        child: _isLoadingMap
+            ? const Center(child: CircularProgressIndicator())
+            : _coordinates != null
+                ? FlutterMap(
+                    options: MapOptions(
+                      initialCenter: _coordinates!,
+                      initialZoom: 15.0,
                     ),
-                  ],
-                ),
-              ],
-            )
-          : Container(
-              color: Colors.grey.withOpacity(0.2),
-              child: const Center(child: Text('Map data not available')),
-            ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.app',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _coordinates!,
+                            width: 80,
+                            height: 80,
+                            child: Icon(Icons.location_pin,
+                                size: 40, color: Colors.red.shade700),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : const Center(child: Text('Map data not available')),
+      ),
     );
   }
 }
@@ -259,8 +324,6 @@ class _TeamVsWidget extends StatelessWidget {
     this.textStyle,
   });
 
-  // --- MODIFIED ---
-  // This widget now displays the score if the game is finished.
   Widget _buildTeamRow(BuildContext context, String school, String team, String? logoUrl, String? score) {
     final effectiveTextStyle = textStyle ?? Theme.of(context).textTheme.titleMedium;
     final bool isFinished = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
@@ -286,8 +349,6 @@ class _TeamVsWidget extends StatelessWidget {
             style: effectiveTextStyle,
           ),
         ),
-        // --- NEW ---
-        // Display the score on the right if the game is finished.
         if (isFinished)
           Padding(
             padding: const EdgeInsets.only(left: 16.0),
