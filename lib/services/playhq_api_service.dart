@@ -32,10 +32,10 @@ class PlayHQApiService {
     if (_cachedTeams != null) return _cachedTeams!;
 
     List<Map<String, dynamic>> allSacredHeartTeams = [];
-    try {
-      final allSeasons = await _fetchSeasonsForOrganisation(_sacredHeartOrgId);
-      
-      for (final season in allSeasons) {
+    final allSeasons = await _fetchSeasonsForOrganisation(_sacredHeartOrgId);
+    
+    for (final season in allSeasons) {
+      try {
         final seasonId = season['id'];
         if (seasonId == null) continue;
 
@@ -47,9 +47,10 @@ class PlayHQApiService {
         allSacredHeartTeams.addAll(sacredHeartTeams);
         
         await Future.delayed(const Duration(milliseconds: 250));
+      } catch (e) {
+        // --- FIX: Catch errors for a single season but continue the loop ---
+        print("PlayHQ Error fetching teams for season ${season['id']}: $e");
       }
-    } catch (e) {
-      print("PlayHQ _fetchAllSacredHeartTeams Error: $e");
     }
     
     final Map<String, Map<String, dynamic>> uniqueTeams = {};
@@ -93,15 +94,19 @@ class PlayHQApiService {
     List<Fixture> allFixtures = [];
     try {
       final allTeams = await _fetchAllSacredHeartTeams();
-
+      
       for (final team in allTeams) {
-        final teamId = team['id'];
-        if (teamId == null) continue;
-        
-        final fixturesData = await _fetchFixtureForTeam(teamId);
-        allFixtures.addAll(fixturesData.map((fix) => Fixture.fromPlayHQJson(fix)));
-        
-        await Future.delayed(const Duration(milliseconds: 100)); 
+        try {
+          final teamId = team['id'];
+          if (teamId == null) continue;
+          
+          final fixturesData = await _fetchFixtureForTeam(teamId);
+          allFixtures.addAll(fixturesData.map((fix) => Fixture.fromPlayHQJson(fix)));
+          
+          await Future.delayed(const Duration(milliseconds: 100)); 
+        } catch (e) {
+          print("PlayHQ Error fetching fixtures for team ${team['id']}: $e");
+        }
       }
 
     } catch (e) {
