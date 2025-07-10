@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'services/collegesport_api_service.dart';
 import 'services/rugbyunion_api_service.dart';
+import 'services/playhq_api_service.dart';
 
 class ApiService {
   final CollegeSportApiService _collegeSportApi = CollegeSportApiService();
   final RugbyUnionApiService _rugbyUnionApi = RugbyUnionApiService();
+  final PlayHQApiService _playHQApi = PlayHQApiService();
 
   static const Map<String, String> _sportIcons = {
     'Football': '⚽', 'Basketball': '🏀', 'Tennis': '🎾', 'Cricket': '🏏',
@@ -22,7 +24,14 @@ class ApiService {
     final List<Sport> sports = sportNames.map((name) {
       final icon = _sportIcons[name] ?? _sportIcons['Default']!;
       final id = name.hashCode; 
-      final source = name == 'Rugby Union' ? DataSource.rugbyUnion : DataSource.collegeSport;
+      DataSource source;
+      if (name == 'Rugby Union') {
+        source = DataSource.rugbyUnion;
+      } else if (name == 'Cricket') {
+        source = DataSource.playHQ;
+      } else {
+        source = DataSource.collegeSport;
+      }
       return Sport(id: id, name: name, icon: icon, source: source);
     }).toList();
 
@@ -34,6 +43,7 @@ class ApiService {
     final results = await Future.wait([
       _collegeSportApi.getFixtures(dateRange: dateRange),
       _rugbyUnionApi.getFixtures(dateRange: dateRange),
+      _playHQApi.getFixtures(dateRange: dateRange),
     ]);
 
     final allFixtures = results.expand((fixtures) => fixtures).toList();
@@ -41,6 +51,12 @@ class ApiService {
   }
 
   Future<List<String>> getTeamsForSport(String sportName) async {
+    // --- FIX: Use a more efficient method for PlayHQ cricket teams ---
+    if (sportName == 'Cricket') {
+      return _playHQApi.getTeams();
+    }
+
+    // Existing logic for other sports
     const String schoolName = "Sacred Heart College";
     final List<Fixture> fixtures = await getFixtures();
 
@@ -69,10 +85,13 @@ class ApiService {
   }
 
   Future<List<StandingsTable>> getStandings(String competitionId, int gradeId, DataSource source) async {
-    if (source == DataSource.collegeSport) {
-      return _collegeSportApi.getStandings(int.parse(competitionId), gradeId);
-    } else {
-      return _rugbyUnionApi.getStandings(competitionId);
+    switch (source) {
+      case DataSource.collegeSport:
+        return _collegeSportApi.getStandings(int.parse(competitionId), gradeId);
+      case DataSource.rugbyUnion:
+        return _rugbyUnionApi.getStandings(competitionId);
+      case DataSource.playHQ:
+        return _playHQApi.getStandings(competitionId);
     }
   }
 }
