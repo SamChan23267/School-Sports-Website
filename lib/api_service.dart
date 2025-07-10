@@ -51,12 +51,10 @@ class ApiService {
   }
 
   Future<List<String>> getTeamsForSport(String sportName) async {
-    // --- FIX: Use a more efficient method for PlayHQ cricket teams ---
     if (sportName == 'Cricket') {
-      return _playHQApi.getTeams();
+      return _playHQApi.getTeamNames();
     }
 
-    // Existing logic for other sports
     const String schoolName = "Sacred Heart College";
     final List<Fixture> fixtures = await getFixtures();
 
@@ -73,13 +71,25 @@ class ApiService {
     return teams;
   }
 
-  Future<List<Fixture>> getFixturesForTeam(String teamName) async {
-    final allFixtures = await getFixtures(
-        dateRange: DateTimeRange(
+  Future<List<Fixture>> getFixturesForTeam(String teamName, String sportName) async {
+    if (sportName == 'Cricket') {
+      return _playHQApi.getFixturesForTeam(teamName);
+    }
+    
+    // Logic for other sports
+    final dateRange = DateTimeRange(
       start: DateTime.now().subtract(const Duration(days: 90)),
       end: DateTime.now().add(const Duration(days: 90)),
-    ));
-    return allFixtures
+    );
+
+    List<Fixture> sourceFixtures;
+    if (sportName == 'Rugby Union') {
+        sourceFixtures = await _rugbyUnionApi.getFixtures(dateRange: dateRange);
+    } else {
+        sourceFixtures = await _collegeSportApi.getFixtures(dateRange: dateRange);
+    }
+    
+    return sourceFixtures
         .where((f) => f.homeTeam == teamName || f.awayTeam == teamName)
         .toList();
   }
