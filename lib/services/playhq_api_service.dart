@@ -23,11 +23,15 @@ class PlayHQApiService {
     'User-Agent': 'Flutter Sports Fixtures App/1.0',
   };
 
+  List<Map<String, dynamic>>? _cachedTeams;
+
   // --- PUBLIC METHODS ---
 
-  /// Efficiently fetches only the names of Sacred Heart cricket teams.
-  Future<List<String>> getTeams() async {
-    List<String> teamNames = [];
+  /// Fetches all Sacred Heart teams across all seasons and caches them.
+  Future<List<Map<String, dynamic>>> _fetchAllSacredHeartTeams() async {
+    if (_cachedTeams != null) return _cachedTeams!;
+
+    List<Map<String, dynamic>> allSacredHeartTeams = [];
     try {
       final allSeasons = await _fetchSeasonsForOrganisation(_sacredHeartOrgId);
       
@@ -37,42 +41,71 @@ class PlayHQApiService {
 
         final teams = await _fetchTeamsForSeason(seasonId);
         final sacredHeartTeams = teams
-            .where((team) => (team['name'] as String? ?? '').toLowerCase().contains('sacred heart'))
-            .map((team) => team['name'] as String)
-            .toList();
+            .whereType<Map<String, dynamic>>()
+            .where((team) => (team['name'] as String? ?? '').toLowerCase().contains('sacred heart'));
         
-        teamNames.addAll(sacredHeartTeams);
+        allSacredHeartTeams.addAll(sacredHeartTeams);
+        
+        await Future.delayed(const Duration(milliseconds: 250));
       }
     } catch (e) {
-      print("PlayHQ getTeams Error: $e");
+      print("PlayHQ _fetchAllSacredHeartTeams Error: $e");
     }
     
-    // Return unique team names, sorted
-    return teamNames.toSet().toList()..sort();
+    final Map<String, Map<String, dynamic>> uniqueTeams = {};
+    for (var team in allSacredHeartTeams) {
+      uniqueTeams[team['id']] = team;
+    }
+    
+    _cachedTeams = uniqueTeams.values.toList();
+    return _cachedTeams!;
   }
 
+  /// Public method for the UI to get a list of team names.
+  Future<List<String>> getTeamNames() async {
+    final teams = await _fetchAllSacredHeartTeams();
+    final teamNames = teams.map((team) => team['name'] as String).toSet().toList();
+    teamNames.sort();
+    return teamNames;
+  }
+
+  /// Public method to get fixtures for a single selected team.
+  Future<List<Fixture>> getFixturesForTeam(String teamName) async {
+    final allTeams = await _fetchAllSacredHeartTeams();
+    
+    final team = allTeams.firstWhere(
+      (t) => t['name'] == teamName,
+      orElse: () => {},
+    );
+
+    if (team.isEmpty || team['id'] == null) {
+      print("Error: Could not find ID for team '$teamName'");
+      return [];
+    }
+
+    final teamId = team['id'];
+    final fixturesData = await _fetchFixtureForTeam(teamId);
+    return fixturesData.map((fix) => Fixture.fromPlayHQJson(fix)).toList();
+  }
+
+  /// Public method for the main Fixture/Results pages.
   Future<List<Fixture>> getFixtures({DateTimeRange? dateRange}) async {
     List<Fixture> allFixtures = [];
     try {
-      final allSeasons = await _fetchSeasonsForOrganisation(_sacredHeartOrgId);
-      
-      for (final season in allSeasons) {
-        final seasonId = season['id'];
-        if (seasonId == null) continue;
+      final allTeams = await _fetchAllSacredHeartTeams();
 
-        final teams = await _fetchTeamsForSeason(seasonId);
-        final sacredHeartTeams = teams.where((team) => (team['name'] as String? ?? '').toLowerCase().contains('sacred heart'));
-
-        for (final team in sacredHeartTeams) {
-          final teamId = team['id'];
-          if (teamId == null) continue;
-          
-          final fixtures = await _fetchFixtureForTeam(teamId);
-          allFixtures.addAll(fixtures.map((fix) => Fixture.fromPlayHQJson(fix)));
-        }
+      for (final team in allTeams) {
+        final teamId = team['id'];
+        if (teamId == null) continue;
+        
+        final fixturesData = await _fetchFixtureForTeam(teamId);
+        allFixtures.addAll(fixturesData.map((fix) => Fixture.fromPlayHQJson(fix)));
+        
+        await Future.delayed(const Duration(milliseconds: 100)); 
       }
+
     } catch (e) {
-      print("PlayHQ Fixtures Error: $e");
+      print("PlayHQ getAllFixtures Error: $e");
     }
 
     if (dateRange != null) {
@@ -114,13 +147,10 @@ class PlayHQApiService {
       final response = await http.get(uri, headers: _headers);
       
       if (response.statusCode >= 400) {
-        throw http.ClientException(
-          'API request to $uri failed with status ${response.statusCode}: ${response.body}',
-        );
+        throw http.ClientException('API request to $uri failed with status ${response.statusCode}: ${response.body}');
       }
 
       final data = json.decode(response.body);
-      
       final List<dynamic> pageData = data['data'] as List<dynamic>? ?? [];
       results.addAll(pageData);
 

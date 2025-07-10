@@ -251,10 +251,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
     });
   }
 
-  void _onTeamSelected(String teamName) {
+  void _onTeamSelected(String teamName, String sportName) {
     setState(() {
       _selectedTeam = teamName;
-      _teamFixturesFuture = _apiService.getFixturesForTeam(teamName);
+      _teamFixturesFuture = _apiService.getFixturesForTeam(teamName, sportName);
       
       _standingsFuture = _teamFixturesFuture!.then((fixtures) {
         if (fixtures.isNotEmpty) {
@@ -450,7 +450,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () => _onTeamSelected(teamName),
+                onPressed: () => _onTeamSelected(teamName, _selectedSport!),
                 child: Text(teamName, textAlign: TextAlign.center),
               ),
             );
