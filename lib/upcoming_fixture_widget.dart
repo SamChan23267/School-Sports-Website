@@ -344,9 +344,11 @@ class _CompactFixtureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const String ourSchool = "Sacred Heart College (Auckland)";
-    final ourTeam = fixture.homeSchool.contains("Sacred Heart College") ? fixture.homeTeam : fixture.awayTeam;
-    final opponentSchool = fixture.homeSchool.contains("Sacred Heart College") ? fixture.awaySchool : fixture.homeSchool;
+    const String ourSchoolName = "Sacred Heart College";
+    final bool isHomeTeamSHC = fixture.homeSchool.contains(ourSchoolName);
+    final String ourTeam = isHomeTeamSHC ? fixture.homeTeam : fixture.awayTeam;
+    final String opponent = isHomeTeamSHC ? fixture.awayTeam : fixture.homeTeam;
+
     final homeScore = fixture.homeScore ?? '-';
     final awayScore = fixture.awayScore ?? '-';
 
@@ -374,7 +376,7 @@ class _CompactFixtureCard extends StatelessWidget {
                   children: [
                     Text(fixture.sport, style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 4),
-                    Text('$ourTeam vs $opponentSchool', style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                    Text('$ourTeam vs $opponent', style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -417,6 +419,8 @@ class _DetailedFixtureCard extends StatelessWidget {
     required String? logoUrl,
     required CrossAxisAlignment alignment
   }) {
+    final bool isCricket = fixture.source == DataSource.playHQ;
+
     return Column(
       crossAxisAlignment: alignment,
       children: [
@@ -430,11 +434,13 @@ class _DetailedFixtureCard extends StatelessWidget {
         else
           const Icon(Icons.shield, size: 48),
         const SizedBox(height: 8),
-        Text(
-          school,
-          style: Theme.of(context).textTheme.bodySmall,
-          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
-        ),
+        if (!isCricket)
+          Text(
+            school,
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+          ),
+        if (!isCricket) const SizedBox(height: 2),
         Text(
           team,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),

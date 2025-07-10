@@ -43,8 +43,7 @@ class _FixtureDetailScreenState extends State<FixtureDetailScreen> {
     });
 
     final query = Uri.encodeComponent(_cleanedVenueName);
-    // Use API parameters to restrict the search to NZ and bias it towards the Auckland region for better accuracy.
-    const aucklandViewbox = '174.45,-37.2,175.15,-36.5'; // A rough bounding box for the Auckland area
+    const aucklandViewbox = '174.45,-37.2,175.15,-36.5';
     final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1&countrycodes=nz&viewbox=$aucklandViewbox&bounded=1');
 
     try {
@@ -329,6 +328,7 @@ class _TeamVsWidget extends StatelessWidget {
     final bool isFinished = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
                             (fixture.awayScore != null && fixture.awayScore!.isNotEmpty) ||
                             fixture.resultStatus != 0;
+    final bool isCricket = fixture.source == DataSource.playHQ;
 
     return Row(
       children: [
@@ -345,7 +345,7 @@ class _TeamVsWidget extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            '$school: $team',
+            isCricket ? team : '$school: $team',
             style: effectiveTextStyle,
           ),
         ),
