@@ -1,6 +1,6 @@
 // lib/models.dart
 
-enum DataSource { collegeSport, rugbyUnion }
+enum DataSource { collegeSport, rugbyUnion, playHQ }
 
 class Fixture {
   final String competitionId;
@@ -121,7 +121,7 @@ class Fixture {
 
     return Fixture(
       competitionId: json['compId'] ?? '',
-      gradeId: null,
+      gradeId: null, 
       sport: 'Rugby Union',
       competition: json['compName'] ?? 'Competition details not available',
       dateTime: json['dateTime'] ?? '',
@@ -133,12 +133,55 @@ class Fixture {
       homeOrgLogo: json['homeTeam']?['crest'],
       awayOrgLogo: json['awayTeam']?['crest'],
       premier: isPremier,
-      lat: null,
-      lng: null,
+      lat: null, 
+      lng: null, 
       homeScore: json['homeTeam']?['score']?.toString(),
       awayScore: json['awayTeam']?['score']?.toString(),
       resultStatus: json['status'] == 'Result' ? 1 : 0,
       source: DataSource.rugbyUnion,
+    );
+  }
+
+  factory Fixture.fromPlayHQJson(Map<String, dynamic> json) {
+    final competitors = json['competitors'] as List<dynamic>? ?? [];
+    Map<String, dynamic> homeTeam = {};
+    Map<String, dynamic> awayTeam = {};
+
+    if (competitors.isNotEmpty) {
+      homeTeam = competitors.firstWhere((c) => c['isHomeTeam'] == true, orElse: () => {});
+      awayTeam = competitors.firstWhere((c) => c['isHomeTeam'] == false, orElse: () => {});
+    }
+
+    final venueObj = json['venue'] ?? {};
+    final venueName = venueObj['name'] ?? 'TBC';
+    final surfaceName = venueObj['surfaceName'] ?? '';
+    final fullVenue = surfaceName.isNotEmpty ? '$venueName - $surfaceName' : venueName;
+
+    final schedule = json['schedule'] ?? {};
+    final dateTime = schedule['date'] != null && schedule['time'] != null
+      ? '${schedule['date'].substring(0, 10)}T${schedule['time']}'
+      : '';
+
+    return Fixture(
+      competitionId: json['grade']?['id'] ?? '',
+      gradeId: null, // Not directly available in this fixture model, but competitionId serves as gradeId
+      sport: 'Cricket',
+      competition: json['grade']?['name'] ?? 'Competition details not available',
+      dateTime: dateTime,
+      venue: fullVenue,
+      homeTeam: homeTeam['name'] ?? 'TBC',
+      awayTeam: awayTeam['name'] ?? 'TBC',
+      homeSchool: homeTeam['name'] ?? 'TBC', // Assuming team name is school name for cricket
+      awaySchool: awayTeam['name'] ?? 'TBC', // Assuming team name is school name for cricket
+      homeOrgLogo: null,
+      awayOrgLogo: null,
+      premier: (json['grade']?['name'] as String? ?? '').toLowerCase().contains('premier'),
+      lat: venueObj['address']?['latitude']?.toDouble(),
+      lng: venueObj['address']?['longitude']?.toDouble(),
+      homeScore: homeTeam['scoreTotal']?.toString(),
+      awayScore: awayTeam['scoreTotal']?.toString(),
+      resultStatus: json['status'] == 'FINAL' ? 1 : 0,
+      source: DataSource.playHQ,
     );
   }
 }
@@ -191,8 +234,30 @@ class StandingsTable {
       standings: allStandings,
     );
   }
-}
 
+  factory StandingsTable.fromPlayHQJson(Map<String, dynamic> json) {
+    List<Standing> allStandings = [];
+    final ladders = json['ladders'] as List<dynamic>? ?? [];
+    
+    for (var ladder in ladders) {
+      final headers = ladder['headers'] as List<dynamic>? ?? [];
+      final standingsData = ladder['standings'] as List<dynamic>? ?? [];
+      final poolName = ladder['pool']?['name'] ?? 'Standings';
+
+      for (var standing in standingsData) {
+        allStandings.add(Standing.fromPlayHQJson(standing, headers));
+      }
+      
+      // Assuming one table per pool for now
+      return StandingsTable(
+        gradeName: '', 
+        sectionName: poolName,
+        standings: allStandings,
+      );
+    }
+    return StandingsTable(gradeName: '', sectionName: 'Standings', standings: []);
+  }
+}
 
 class Standing {
   final String teamName;
@@ -254,6 +319,31 @@ class Standing {
       differential: json['pointsDifference'] ?? 0,
       total: json['totalMatchPoints'] ?? 0,
       position: json['position'] ?? 0,
+    );
+  }
+
+  factory Standing.fromPlayHQJson(Map<String, dynamic> json, List<dynamic> headers) {
+    int getStat(String key) {
+      final index = headers.indexWhere((h) => h['key'] == key);
+      if (index != -1 && json['values'] != null && index < (json['values'] as List).length) {
+        return (json['values'][index] as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    }
+
+    return Standing(
+      teamName: json['team']?['name'] ?? '',
+      played: getStat('played'),
+      win: getStat('won'),
+      loss: getStat('lost'),
+      draw: getStat('drawn'),
+      byes: getStat('byes'),
+      bonus: getStat('bonusPoints'), // Assuming a key, might need adjustment
+      pointsFor: getStat('for'),
+      pointsAgainst: getStat('against'),
+      differential: getStat('goalDifference'), // Or similar key
+      total: getStat('points'),
+      position: getStat('ranking'),
     );
   }
 }
