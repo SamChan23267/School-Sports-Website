@@ -27,15 +27,24 @@ class PlayHQApiService {
 
   // --- PUBLIC METHODS ---
 
-  /// Fetches all Sacred Heart teams across all seasons and caches them.
+  /// Fetches all Sacred Heart teams across all relevant seasons and caches them.
   Future<List<Map<String, dynamic>>> _fetchAllSacredHeartTeams() async {
     if (_cachedTeams != null) return _cachedTeams!;
 
     List<Map<String, dynamic>> allSacredHeartTeams = [];
-    final allSeasons = await _fetchSeasonsForOrganisation(_sacredHeartOrgId);
-    
-    for (final season in allSeasons) {
-      try {
+    try {
+      final allSeasons = await _fetchSeasonsForOrganisation(_sacredHeartOrgId);
+      
+      // --- FIX: Simplified the season filter to only use the current year ---
+      final currentYear = DateTime.now().year.toString(); // e.g., "2025"
+
+      final targetSeasons = allSeasons.where((season) {
+        final seasonName = (season['name'] as String? ?? '').toLowerCase();
+        // Only include seasons that contain the current year string.
+        return seasonName.contains(currentYear);
+      });
+
+      for (final season in targetSeasons) {
         final seasonId = season['id'];
         if (seasonId == null) continue;
 
@@ -47,10 +56,9 @@ class PlayHQApiService {
         allSacredHeartTeams.addAll(sacredHeartTeams);
         
         await Future.delayed(const Duration(milliseconds: 250));
-      } catch (e) {
-        // --- FIX: Catch errors for a single season but continue the loop ---
-        print("PlayHQ Error fetching teams for season ${season['id']}: $e");
       }
+    } catch (e) {
+      print("PlayHQ _fetchAllSacredHeartTeams Error: $e");
     }
     
     final Map<String, Map<String, dynamic>> uniqueTeams = {};
@@ -94,7 +102,7 @@ class PlayHQApiService {
     List<Fixture> allFixtures = [];
     try {
       final allTeams = await _fetchAllSacredHeartTeams();
-      
+
       for (final team in allTeams) {
         try {
           final teamId = team['id'];
