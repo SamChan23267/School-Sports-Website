@@ -45,12 +45,49 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   
   List<Fixture> _allFixtures = [];
 
+  // --- NEW STATE FOR FILTERS ---
+  List<String> _allPossibleSports = [];
+  Map<String, List<String>> _allPossibleTeamsBySport = {};
+  bool _areFiltersLoading = true;
+  // -----------------------------
+
 
   @override
   void initState() {
     super.initState();
+    _loadFilterData();
     _resetFiltersAndFetch();
   }
+
+  // --- NEW METHOD to pre-load all possible filter options ---
+  void _loadFilterData() async {
+    setState(() {
+      _areFiltersLoading = true;
+    });
+
+    // Get all sports associated with the school
+    final sports = await _apiService.getSportsForSacredHeart();
+    _allPossibleSports = sports.map((s) => s.name).toList()..sort();
+
+    // Fetch all teams for all sports in parallel for efficiency
+    final teamsFutures = _allPossibleSports.map((sportName) {
+      return _apiService.getTeamsForSport(sportName);
+    }).toList();
+
+    final teamsResults = await Future.wait(teamsFutures);
+
+    // Populate the map for easy lookup in the filter dialog
+    for (int i = 0; i < _allPossibleSports.length; i++) {
+      _allPossibleTeamsBySport[_allPossibleSports[i]] = teamsResults[i];
+    }
+
+    if (mounted) {
+      setState(() {
+        _areFiltersLoading = false;
+      });
+    }
+  }
+  // ---------------------------------------------------------
 
   @override
   void didUpdateWidget(UpcomingFixtureWidget oldWidget) {
@@ -89,18 +126,16 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
   }
 
   void _showFilterDialog() {
-    final sports = _allFixtures.map((f) => f.sport).toSet().toList()..sort();
-    
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
             
-            final sacredHeartTeams = _allFixtures
-                .where((f) => (_filters.sport == null || f.sport == _filters.sport) && (f.homeSchool.contains("Sacred Heart College") || f.awaySchool.contains("Sacred Heart College")))
-                .map((f) => f.homeSchool.contains("Sacred Heart College") ? f.homeTeam : f.awayTeam)
-                .toSet().toList()..sort();
+            // Get the list of teams based on the currently selected sport in the filter.
+            final sacredHeartTeams = _filters.sport == null
+                ? <String>[] // If no sport is selected, the team list is empty.
+                : _allPossibleTeamsBySport[_filters.sport] ?? [];
 
             return AlertDialog(
               title: const Text('Filter Fixtures'),
@@ -135,12 +170,13 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                       onChanged: (String? newValue) {
                         setDialogState(() {
                           _filters.sport = newValue;
-                          _filters.team = null;
+                          _filters.team = null; // Reset team when sport changes
                         });
                       },
+                      // Populate dropdown with all possible sports
                       items: [
                         const DropdownMenuItem<String>(value: null, child: Text('All Sports')),
-                        ...sports.map((s) => DropdownMenuItem<String>(value: s, child: Text(s)))
+                        ..._allPossibleSports.map((s) => DropdownMenuItem<String>(value: s, child: Text(s)))
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -152,6 +188,7 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                       onChanged: (String? newValue) {
                         setDialogState(() => _filters.team = newValue);
                       },
+                      // Populate dropdown with teams for the selected sport
                       items: [
                         const DropdownMenuItem<String>(value: null, child: Text('All Teams')),
                         ...sacredHeartTeams.map((t) => DropdownMenuItem<String>(value: t, child: Text(t)))
@@ -244,12 +281,8 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
             children: [
               IconButton(
                 icon: const Icon(Icons.filter_list),
-                onPressed: () {
-                  if (_allFixtures.isNotEmpty) {
-                    _showFilterDialog();
-                  }
-                },
-                tooltip: 'Filter Fixtures',
+                onPressed: _areFiltersLoading ? null : _showFilterDialog,
+                tooltip: _areFiltersLoading ? 'Loading filters...' : 'Filter Fixtures',
               ),
               IconButton(
                 icon: Icon(_isCompactView ? Icons.view_stream : Icons.view_list),

@@ -12,13 +12,18 @@ class ApiService {
   final PlayHQApiService _playHQApi = PlayHQApiService();
 
   static const Map<String, String> _sportIcons = {
-    'Football': '⚽', 'Basketball': '🏀', 'Tennis': '🎾', 'Cricket': '🏏',
-    'Hockey': '🏒', 'Rugby Union': '🏉', 'Volleyball': '🏐', 'Netball': '🥅',
+    'Football (School Sport)': '⚽', 'Basketball (School Sport)': '🏀', 'Tennis': '🎾', 'Cricket': '🏏',
+    'Hockey (School Sport)': '🏒', 'Rugby Union': '🏉', 'Volleyball': '🏐', 'Netball': '🥅',
     'Default': '🏅',
   };
 
   Future<List<Sport>> getSportsForSacredHeart() async {
-    final List<Fixture> allFixtures = await getFixtures();
+    // Fetch fixtures over a wide date range to ensure all sports are discovered.
+    final dateRange = DateTimeRange(
+      start: DateTime.now().subtract(const Duration(days: 365)),
+      end: DateTime.now().add(const Duration(days: 180)),
+    );
+    final List<Fixture> allFixtures = await getFixtures(dateRange: dateRange);
     final Set<String> sportNames = allFixtures.map((f) => f.sport).toSet();
     
     final List<Sport> sports = sportNames.map((name) {
@@ -51,14 +56,28 @@ class ApiService {
   }
 
   Future<List<String>> getTeamsForSport(String sportName) async {
+    // Cricket is handled by a specific API that already returns all teams.
     if (sportName == 'Cricket') {
       return _playHQApi.getTeamNames();
     }
 
     const String schoolName = "Sacred Heart College";
-    final List<Fixture> fixtures = await getFixtures();
+    // Use a wide date range to discover all teams for the given sport.
+    final dateRange = DateTimeRange(
+      start: DateTime.now().subtract(const Duration(days: 365)),
+      end: DateTime.now().add(const Duration(days: 180)),
+    );
 
-    final teams = fixtures
+    List<Fixture> sourceFixtures;
+    // Call the specific API service based on the sport to be more efficient.
+    if (sportName == 'Rugby Union') {
+        sourceFixtures = await _rugbyUnionApi.getFixtures(dateRange: dateRange);
+    } else {
+        // Assume all other non-cricket sports are from CollegeSport.
+        sourceFixtures = await _collegeSportApi.getFixtures(dateRange: dateRange);
+    }
+    
+    final teams = sourceFixtures
         .where((f) => f.sport == sportName && (f.homeSchool.contains(schoolName) || f.awaySchool.contains(schoolName)))
         .map((f) {
             if (f.homeSchool.contains(schoolName)) return f.homeTeam;
