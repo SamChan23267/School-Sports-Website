@@ -378,11 +378,12 @@ class _CompactFixtureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isCricket = fixture.source == DataSource.playHQ;
+    final bool isRugby = fixture.source == DataSource.rugbyUnion;
 
-    // For cricket, school and team name are the same, so just show team name.
+    // For cricket or rugby, school and team name are the same or combined, so just show team name.
     // For others, show school: team.
-    final String homeDisplay = isCricket ? fixture.homeTeam : '${fixture.homeSchool}: ${fixture.homeTeam}';
-    final String awayDisplay = isCricket ? fixture.awayTeam : '${fixture.awaySchool}: ${fixture.awayTeam}';
+    final String homeDisplay = (isCricket || isRugby) ? fixture.homeTeam : '${fixture.homeSchool}: ${fixture.homeTeam}';
+    final String awayDisplay = (isCricket || isRugby) ? fixture.awayTeam : '${fixture.awaySchool}: ${fixture.awayTeam}';
 
     final homeScore = fixture.homeScore ?? '-';
     final awayScore = fixture.awayScore ?? '-';
@@ -460,6 +461,7 @@ class _DetailedFixtureCard extends StatelessWidget {
     required CrossAxisAlignment alignment
   }) {
     final bool isCricket = fixture.source == DataSource.playHQ;
+    final bool isRugby = fixture.source == DataSource.rugbyUnion;
 
     return Column(
       crossAxisAlignment: alignment,
@@ -474,13 +476,13 @@ class _DetailedFixtureCard extends StatelessWidget {
         else
           const Icon(Icons.shield, size: 48),
         const SizedBox(height: 8),
-        if (!isCricket)
+        if (!isCricket && !isRugby)
           Text(
             school,
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
           ),
-        if (!isCricket) const SizedBox(height: 2),
+        if (!isCricket && !isRugby) const SizedBox(height: 2),
         Text(
           team,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
