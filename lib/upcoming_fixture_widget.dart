@@ -377,10 +377,12 @@ class _CompactFixtureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const String ourSchoolName = "Sacred Heart College";
-    final bool isHomeTeamSHC = fixture.homeSchool.contains(ourSchoolName);
-    final String ourTeam = isHomeTeamSHC ? fixture.homeTeam : fixture.awayTeam;
-    final String opponent = isHomeTeamSHC ? fixture.awayTeam : fixture.homeTeam;
+    final bool isCricket = fixture.source == DataSource.playHQ;
+
+    // For cricket, school and team name are the same, so just show team name.
+    // For others, show school: team.
+    final String homeDisplay = isCricket ? fixture.homeTeam : '${fixture.homeSchool}: ${fixture.homeTeam}';
+    final String awayDisplay = isCricket ? fixture.awayTeam : '${fixture.awaySchool}: ${fixture.awayTeam}';
 
     final homeScore = fixture.homeScore ?? '-';
     final awayScore = fixture.awayScore ?? '-';
@@ -409,7 +411,12 @@ class _CompactFixtureCard extends StatelessWidget {
                   children: [
                     Text(fixture.sport, style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 4),
-                    Text('$ourTeam vs $opponent', style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                    Text(
+                      '$homeDisplay vs $awayDisplay',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2, // Allow wrapping to a second line
+                    ),
                   ],
                 ),
               ),
