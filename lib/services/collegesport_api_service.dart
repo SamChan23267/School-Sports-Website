@@ -20,6 +20,7 @@ class CollegeSportApiService {
   };
 
   Map<String, dynamic>? _cachedMetadata;
+  Map<String, dynamic>? _cachedAvailablePhases;
   List<Fixture>? _cachedFixtures;
 
   Future<List<Fixture>> getFixtures({DateTimeRange? dateRange}) async {
@@ -74,28 +75,44 @@ class CollegeSportApiService {
 
   Future<List<StandingsTable>> getStandings(int competitionId, int gradeId) async {
     try {
-      final metadata = await _getMetadata();
-      final phasesForComp = metadata['PhasesPerComp']?[competitionId.toString()] as List<dynamic>?;
+      // Fetch the map of all available phases for standings.
+      final availablePhases = await _getAvailablePhases();
+      // Get the list of phases specifically for our competitionId.
+      final phasesForComp = availablePhases[competitionId.toString()] as List<dynamic>?;
 
       if (phasesForComp == null || phasesForComp.isEmpty) {
-         return [];
+        print("No available phases found for competitionId: $competitionId");
+        return [];
       }
       
-      final phaseId = phasesForComp.first['Id'];
-      final payload = {"GradeId": gradeId, "PhaseId": phaseId};
+      // Iterate through all available phases for the competition, as standings might be in any of them.
+      for (final phase in phasesForComp) {
+        final phaseId = phase['Id'];
+        if (phaseId == null) continue;
 
-      final response = await http.post(
-        Uri.parse('$_collegeSportBaseUrl/standings/Phase'),
-        headers: _headers,
-        body: json.encode(payload),
-      );
+        final payload = {"GradeId": gradeId, "PhaseId": phaseId};
 
-      if (response.statusCode == 200) {
-        final List<dynamic> decodedData = json.decode(response.body);
-        return decodedData.map((tableData) => StandingsTable.fromCollegeSportJson(tableData)).toList();
-      } else {
-         throw http.ClientException('Failed to load standings with status code: ${response.statusCode}');
+        final response = await http.post(
+          Uri.parse('$_collegeSportBaseUrl/standings/Phase'),
+          headers: _headers,
+          body: json.encode(payload),
+        );
+
+        if (response.statusCode == 200) {
+          final List<dynamic> decodedData = json.decode(response.body);
+          // If the response for this phase contains standings, we've found them.
+          if (decodedData.isNotEmpty && (decodedData.first['Standings'] as List).isNotEmpty) {
+            print("Found standings in phaseId: $phaseId for gradeId: $gradeId");
+            return decodedData.map((tableData) => StandingsTable.fromCollegeSportJson(tableData)).toList();
+          }
+        } else {
+          // Log the error but continue to try the next phase, as this is not a fatal error.
+          print('Failed to load standings for phase $phaseId with status code: ${response.statusCode}');
+        }
       }
+      
+      // If we loop through all phases and find no standings, return an empty list.
+      return [];
     } catch (e) {
       print("CollegeSport Standings Error: $e");
       throw ApiException('Could not load CollegeSport standings. Please check your connection.');
@@ -117,5 +134,26 @@ class CollegeSportApiService {
       return _cachedMetadata!;
     }
     throw http.ClientException('Failed to load CollegeSport metadata.');
+  }
+
+  Future<Map<String, dynamic>> _getAvailablePhases() async {
+    if (_cachedAvailablePhases != null) return _cachedAvailablePhases!;
+
+    final metadata = await _getMetadata();
+    // The API expects a list of competition IDs as strings.
+    final allCompIds = (metadata['Competitions'] as List).map<int>((c) => c['Id']).toList();
+    final payload = {"CompIds": allCompIds};
+
+    final response = await http.post(
+        Uri.parse('$_collegeSportBaseUrl/standings/availablePhases'),
+        headers: _headers,
+        body: json.encode(payload),
+    );
+
+    if (response.statusCode == 200) {
+        _cachedAvailablePhases = json.decode(response.body);
+        return _cachedAvailablePhases!;
+    }
+    throw http.ClientException('Failed to load available phases for standings.');
   }
 }

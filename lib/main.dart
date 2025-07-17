@@ -256,17 +256,53 @@ class _SportsListColumnState extends State<SportsListColumn> {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName, sportName);
       
-      _standingsFuture = _teamFixturesFuture!.then((fixtures) {
-        if (fixtures.isNotEmpty) {
-          final firstFixture = fixtures.first;
-          final competitionId = firstFixture.competitionId;
-          final gradeId = firstFixture.gradeId;
-          final source = firstFixture.source;
-          
-          return _apiService.getStandings(competitionId, gradeId ?? 0, source);
-        } else {
+      _standingsFuture = _teamFixturesFuture!.then((fixtures) async {
+        if (fixtures.isEmpty) {
           return <StandingsTable>[];
         }
+
+        // Use a safer method to find the first non-CollegeSport fixture
+        final nonCollegeSportFixtures = fixtures.where((f) => f.source != DataSource.collegeSport);
+        final Fixture? nonCollegeSportFixture = nonCollegeSportFixtures.isNotEmpty ? nonCollegeSportFixtures.first : null;
+
+        if (nonCollegeSportFixture != null) {
+            return _apiService.getStandings(
+                nonCollegeSportFixture.competitionId,
+                nonCollegeSportFixture.gradeId ?? 0,
+                nonCollegeSportFixture.source,
+            );
+        }
+
+        // For CollegeSport, find all possible fixtures that could lead to a standings table.
+        final possibleFixtures = fixtures.where(
+            (f) => f.source == DataSource.collegeSport && f.gradeId != null && f.gradeId != 0
+        ).toList();
+
+        if (possibleFixtures.isEmpty) {
+            print("No CollegeSport fixtures with a valid gradeId found for team: $_selectedTeam");
+            return <StandingsTable>[];
+        }
+
+        // Try each possible fixture until we get a successful result.
+        for (final fixture in possibleFixtures) {
+            try {
+                final standings = await _apiService.getStandings(
+                    fixture.competitionId,
+                    fixture.gradeId!, // Not null due to the 'where' filter above
+                    fixture.source
+                );
+                // If we get a result, return it immediately.
+                if (standings.isNotEmpty) {
+                    return standings;
+                }
+            } catch (e) {
+                print("Could not get standings for compId ${fixture.competitionId}, gradeId ${fixture.gradeId}. Trying next. Error: $e");
+            }
+        }
+
+        // If we loop through all possibilities and find nothing, return an empty list.
+        print("Could not find any standings for team: $_selectedTeam after trying all possible fixtures.");
+        return <StandingsTable>[];
       });
     });
   }
@@ -558,6 +594,9 @@ class _SportsListColumnState extends State<SportsListColumn> {
           itemCount: tables.length,
           itemBuilder: (context, index) {
             final table = tables[index];
+            final title = (table.gradeName.isNotEmpty && table.gradeName != table.sectionName)
+              ? '${table.gradeName} - ${table.sectionName}'
+              : table.sectionName;
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
               child: Padding(
@@ -568,7 +607,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Text(
-                        table.sectionName,
+                        title,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -617,14 +656,22 @@ class _SportsListColumnState extends State<SportsListColumn> {
   }
 }
 
+// This is a private helper widget to avoid scope issues.
+class _TeamDisplay extends StatelessWidget {
+  final String school;
+  final String team;
+  final bool isCricket;
+  final CrossAxisAlignment alignment;
 
-class _FixtureResultCard extends StatelessWidget {
-  final Fixture fixture;
-  const _FixtureResultCard({required this.fixture});
+  const _TeamDisplay({
+    required this.school,
+    required this.team,
+    required this.isCricket,
+    required this.alignment,
+  });
 
-  Widget _buildTeamDisplay(BuildContext context, String school, String team, {required CrossAxisAlignment alignment}) {
-    final bool isCricket = fixture.source == DataSource.playHQ;
-
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: alignment,
       children: [
@@ -643,6 +690,12 @@ class _FixtureResultCard extends StatelessWidget {
       ],
     );
   }
+}
+
+
+class _FixtureResultCard extends StatelessWidget {
+  final Fixture fixture;
+  const _FixtureResultCard({required this.fixture});
 
   @override
   Widget build(BuildContext context) {
@@ -653,6 +706,7 @@ class _FixtureResultCard extends StatelessWidget {
     final homeScore = fixture.homeScore ?? '';
     final awayScore = fixture.awayScore ?? '';
     final scoreColor = Theme.of(context).colorScheme.primary;
+    final bool isCricket = fixture.source == DataSource.playHQ;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -672,10 +726,10 @@ class _FixtureResultCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: _buildTeamDisplay(
-                    context,
-                    fixture.homeSchool,
-                    fixture.homeTeam,
+                  child: _TeamDisplay(
+                    school: fixture.homeSchool,
+                    team: fixture.homeTeam,
+                    isCricket: isCricket,
                     alignment: CrossAxisAlignment.start,
                   ),
                 ),
@@ -692,10 +746,10 @@ class _FixtureResultCard extends StatelessWidget {
                       ),
                 ),
                 Expanded(
-                  child: _buildTeamDisplay(
-                    context,
-                    fixture.awaySchool,
-                    fixture.awayTeam,
+                  child: _TeamDisplay(
+                    school: fixture.awaySchool,
+                    team: fixture.awayTeam,
+                    isCricket: isCricket,
                     alignment: CrossAxisAlignment.end,
                   ),
                 ),

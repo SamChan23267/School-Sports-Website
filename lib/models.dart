@@ -1,4 +1,4 @@
-// lib/models.dart
+   // lib/models.dart
 
 enum DataSource { collegeSport, rugbyUnion, playHQ }
 
@@ -9,6 +9,7 @@ class Fixture {
   final String competition;
   final String dateTime;
   final String venue;
+  final String? venueAddress;
   final String homeTeam;
   final String awayTeam;
   final String homeSchool;
@@ -30,6 +31,7 @@ class Fixture {
     required this.competition,
     required this.dateTime,
     required this.venue,
+    this.venueAddress,
     required this.homeTeam,
     required this.awayTeam,
     required this.homeSchool,
@@ -87,6 +89,7 @@ class Fixture {
       competition: fullCompetitionName.isNotEmpty ? fullCompetitionName : "Competition details not available",
       dateTime: json['From'] ?? '',
       venue: json['VenueName'] ?? 'TBC',
+      venueAddress: json['VenueAddress'],
       homeTeam: homeTeamName,
       awayTeam: awayTeamName,
       homeSchool: json['HomeOrgName'] ?? '',
@@ -126,6 +129,7 @@ class Fixture {
       competition: json['compName'] ?? 'Competition details not available',
       dateTime: json['dateTime'] ?? '',
       venue: json['venue'] ?? 'TBC',
+      venueAddress: null,
       homeTeam: homeTeamName,
       awayTeam: awayTeamName,
       homeSchool: homeSchool,
@@ -148,8 +152,8 @@ class Fixture {
     Map<String, dynamic> awayTeam = {};
 
     if (competitors.isNotEmpty) {
-      homeTeam = competitors.firstWhere((c) => c['isHomeTeam'] == true, orElse: () => {});
-      awayTeam = competitors.firstWhere((c) => c['isHomeTeam'] == false, orElse: () => {});
+      homeTeam = competitors.firstWhere((c) => c['isHomeTeam'] == true, orElse: () => <String, dynamic>{});
+      awayTeam = competitors.firstWhere((c) => c['isHomeTeam'] == false, orElse: () => <String, dynamic>{});
     }
 
     final venueObj = json['venue'] ?? {};
@@ -169,6 +173,7 @@ class Fixture {
       competition: json['grade']?['name'] ?? 'Competition details not available',
       dateTime: dateTime,
       venue: fullVenue,
+      venueAddress: null,
       homeTeam: homeTeam['name'] ?? 'TBC',
       awayTeam: awayTeam['name'] ?? 'TBC',
       homeSchool: homeTeam['name'] ?? 'TBC', // Assuming team name is school name for cricket
@@ -207,8 +212,14 @@ class StandingsTable {
   });
 
   factory StandingsTable.fromCollegeSportJson(Map<String, dynamic> json) {
-    var standingsList = json['Standings'] as List;
-    List<Standing> standings = standingsList.map((i) => Standing.fromCollegeSportJson(i)).toList();
+    var standingsList = json['Standings'] as List? ?? [];
+    List<Standing> standings = [];
+    for (int i = 0; i < standingsList.length; i++) {
+        var standingData = standingsList[i] as Map<String, dynamic>;
+        // Manually add the position based on the list order, as it's not in the API response.
+        standingData['Position'] = i + 1; 
+        standings.add(Standing.fromCollegeSportJson(standingData));
+    }
     return StandingsTable(
       gradeName: json['GradeName'] ?? '',
       sectionName: json['SectionName'] ?? 'Standings',
