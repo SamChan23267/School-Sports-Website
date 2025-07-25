@@ -89,6 +89,10 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Calculate the left padding as a percentage of screen width, similar to the website's 8%
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double leftPadding = screenWidth * 0.08;
+
     return Scaffold(
       appBar: AppBar(
         title: Image.asset(
@@ -183,7 +187,29 @@ class _LandingPageState extends State<LandingPage> {
           ],
         ),
       ),
-      body: _buildCurrentView(),
+      body: Column(
+        children: [
+          // This container represents the colored line
+          Container(
+            height: 8.0,
+            color: const Color(0xFF063368), // Dark blue background of the line
+            padding: EdgeInsets.only(left: leftPadding),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  color: const Color(0xFFFF2D16), // Red part
+                ),
+                Container(
+                  width: 106,
+                  color: const Color(0xFF76BCE8), // Light blue part
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: _buildCurrentView()),
+        ],
+      ),
     );
   }
 
