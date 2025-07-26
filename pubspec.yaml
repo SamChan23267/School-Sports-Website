@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  flutter_svg: ^2.0.10+1
   http: ^1.2.1
 
   shelf: ^1.4.1         

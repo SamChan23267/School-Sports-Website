@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart'; // Import the SVG package
 import 'package:intl/intl.dart';
 import 'upcoming_fixture_widget.dart';
 import 'api_service.dart';
@@ -34,7 +35,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'Sacred Heart College Sports',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
+      theme: ThemeData( // Light Theme
         colorScheme: ColorScheme.fromSeed(
           seedColor: shcDarkBlue,
           primary: shcDarkBlue,
@@ -42,9 +43,13 @@ class _MyAppState extends State<MyApp> {
           error: shcRed,
           brightness: Brightness.light,
         ),
+        appBarTheme: const AppBarTheme( // White AppBar for light mode
+          backgroundColor: Colors.white,
+          foregroundColor: shcDarkBlue, // For icons and text
+        ),
         useMaterial3: true,
       ),
-      darkTheme: ThemeData(
+      darkTheme: ThemeData( // Dark Theme
         colorScheme: ColorScheme.fromSeed(
           seedColor: shcDarkBlue,
           primary: shcDarkBlue,
@@ -52,10 +57,10 @@ class _MyAppState extends State<MyApp> {
           error: shcRed,
           brightness: Brightness.dark,
         ),
-        scaffoldBackgroundColor: const Color(0xFF121212), // Darker background
-        appBarTheme: const AppBarTheme(
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        appBarTheme: const AppBarTheme( // Dark Blue AppBar for dark mode
           backgroundColor: shcDarkBlue,
-          foregroundColor: Colors.white,
+          foregroundColor: Colors.white, // For icons and text
         ),
         useMaterial3: true,
       ),
@@ -93,10 +98,13 @@ class _LandingPageState extends State<LandingPage> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final double leftPadding = screenWidth * 0.08;
 
+    // Determine which logo to use based on the theme
+    final String logoAsset = widget.themeMode == ThemeMode.dark ? shcLogoWhitePath : shcLogoBluePath;
+
     return Scaffold(
       appBar: AppBar(
-        title: Image.asset(
-          shcLogoWhitePath, // Use the new white PNG logo
+        title: SvgPicture.asset(
+          logoAsset, // Use the dynamically selected SVG logo
           height: 40, // Adjust height as needed
         ),
         centerTitle: true,
@@ -124,7 +132,7 @@ class _LandingPageState extends State<LandingPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
+                  SvgPicture.asset( // Changed from Image.asset to SvgPicture.asset
                     shcCrestPath,
                     height: 80,
                   ),

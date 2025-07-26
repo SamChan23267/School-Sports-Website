@@ -9,7 +9,7 @@ const Color shcRed = Color(0xFFE30613);
 const Color shcDarkGrey = Color(0xFF70706F);
 
 // Logo Asset Paths
-const String shcLogoPath = 'assets/images/SHC_Logo_transparent.png';
-const String shcCrestPath = 'assets/images/SHC_Crest_transparent.png';
-const String shcLogoWhitePath = 'assets/images/SHC_Logo_White_transparent.png'; // New white logo path
+const String shcLogoBluePath = 'assets/images/shc_logo_blue.svg'; // For light mode
+const String shcLogoWhitePath = 'assets/images/shc_logo_white.svg'; // For dark mode
+const String shcCrestPath = 'assets/images/shc_crest.svg'; // Updated to SVG
 
