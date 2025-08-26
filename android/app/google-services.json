@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "901868140405",
+    "project_id": "school-sports-portal",
+    "storage_bucket": "school-sports-portal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:901868140405:android:d4329a15e6a869782d053c",
+        "android_client_info": {
+          "package_name": "com.example.sports_fixtures_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "901868140405-h7dmao8guk1ilcknlapjkvh61scv6njn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.sports_fixtures_app",
+            "certificate_hash": "cc879d00687d957c68128fbbbc3b08fce27c9249"
+          }
+        },
+        {
+          "client_id": "901868140405-qe2qggjn1sll0ec6g3k53l65p75al8lm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4kIqAazlSr4dmqG8JhQ2x8JCTSfoTJPQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "901868140405-qe2qggjn1sll0ec6g3k53l65p75al8lm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

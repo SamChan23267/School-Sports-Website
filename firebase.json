@@ -1,16 +1,1 @@
-{
-  "hosting": {
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
-}
+{"flutter":{"platforms":{"android":{"default":{"projectId":"school-sports-portal","appId":"1:901868140405:android:d4329a15e6a869782d053c","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"school-sports-portal","configurations":{"android":"1:901868140405:android:d4329a15e6a869782d053c","ios":"1:901868140405:ios:6108b33fddb441112d053c","macos":"1:901868140405:ios:6108b33fddb441112d053c","web":"1:901868140405:web:58682f2afed672ce2d053c","windows":"1:901868140405:web:ff362b380adecef32d053c"}}}}}}

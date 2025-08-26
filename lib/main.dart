@@ -2,14 +2,27 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
+import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import 'firebase_options.dart'; // Import generated options
 import 'upcoming_fixture_widget.dart';
 import 'api_service.dart';
 import 'models.dart';
 import 'contact_us_page.dart';
+import 'login_page.dart'; // Import the new login page
+import 'auth_service.dart'; // Import the auth service
 
-void main() {
+// The main function is now async to await Firebase initialization
+void main() async {
+  // Ensure that Flutter bindings are initialized before calling Firebase.initializeApp
+  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -75,6 +88,7 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   AppView _currentView = AppView.upcomingFixtures;
+  final AuthService _authService = AuthService(); // Instance of AuthService
 
   String get _currentViewTitle {
     switch (_currentView) {
@@ -106,18 +120,79 @@ class _LandingPageState extends State<LandingPage> {
             child: const Text('Contact Us'),
           ),
           const SizedBox(width: 8),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18)),
-            ),
-            onPressed: () {},
-            child: const Text(
-              'Login',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+          // NEW: We use a StreamBuilder to listen to auth changes
+          StreamBuilder<User?>(
+            stream: _authService.user,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+                );
+              }
+              // If user is logged in, show their info and a logout button
+              if (snapshot.hasData && snapshot.data != null) {
+                final user = snapshot.data!;
+                return PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'logout') {
+                      _authService.signOut();
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      enabled: false, // Make it not clickable
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundImage: NetworkImage(user.photoURL ?? ''),
+                            radius: 15,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(user.displayName ?? 'User'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Text('Logout'),
+                    ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: CircleAvatar(
+                      backgroundImage: NetworkImage(user.photoURL ?? ''),
+                      radius: 18,
+                    ),
+                  ),
+                );
+              }
+              // If user is not logged in, show the login button
+              return OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18)),
+                ),
+                onPressed: () {
+                  // NEW: Navigate to the LoginPage
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                  );
+                },
+                child: const Text(
+                  'Login',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 14),
           IconButton(
