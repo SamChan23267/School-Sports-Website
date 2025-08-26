@@ -12,17 +12,12 @@ import 'contact_us_page.dart';
 import 'login_page.dart'; // Import the new login page
 import 'auth_service.dart'; // Import the auth service
 
-// The main function is now async to await Firebase initialization
-void main() async {
-  // Ensure that Flutter bindings are initialized before calling Firebase.initializeApp
+void main() {
+  // We no longer need main to be async.
+  // Initialization is handled in the MyApp widget.
   WidgetsFlutterBinding.ensureInitialized();
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   runApp(const MyApp());
 }
-
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -33,6 +28,10 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.dark;
+  // This future will hold the result of the Firebase initialization.
+  final Future<FirebaseApp> _initialization = Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   void _toggleTheme() {
     setState(() {
@@ -62,9 +61,34 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
       ),
       themeMode: _themeMode,
-      home: LandingPage(
-        themeMode: _themeMode,
-        onToggleTheme: _toggleTheme,
+      // NEW: We use a FutureBuilder to wait for Firebase to initialize.
+      home: FutureBuilder(
+        future: _initialization,
+        builder: (context, snapshot) {
+          // If there's an error, show it.
+          if (snapshot.hasError) {
+            return Scaffold(
+              body: Center(
+                child: Text('Error initializing Firebase: ${snapshot.error}'),
+              ),
+            );
+          }
+
+          // If initialization is complete, show the LandingPage.
+          if (snapshot.connectionState == ConnectionState.done) {
+            return LandingPage(
+              themeMode: _themeMode,
+              onToggleTheme: _toggleTheme,
+            );
+          }
+
+          // Otherwise, show a loading indicator.
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
       ),
     );
   }
@@ -120,7 +144,7 @@ class _LandingPageState extends State<LandingPage> {
             child: const Text('Contact Us'),
           ),
           const SizedBox(width: 8),
-          // NEW: We use a StreamBuilder to listen to auth changes
+          // We use a StreamBuilder to listen to auth changes
           StreamBuilder<User?>(
             stream: _authService.user,
             builder: (context, snapshot) {
@@ -181,7 +205,6 @@ class _LandingPageState extends State<LandingPage> {
                       borderRadius: BorderRadius.circular(18)),
                 ),
                 onPressed: () {
-                  // NEW: Navigate to the LoginPage
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const LoginPage()),
