@@ -11,10 +11,14 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final AuthService _authService = AuthService();
+  // Access the single, shared instance of AuthService instead of creating a new one.
+  final AuthService _authService = AuthService.instance;
+
   bool _isLoading = false;
 
   void _signInWithGoogle() async {
+    if (_isLoading) return; // Prevent double-clicks
+
     setState(() {
       _isLoading = true;
     });
@@ -63,10 +67,12 @@ class _LoginPageState extends State<LoginPage> {
                   ? const CircularProgressIndicator()
                   : ElevatedButton.icon(
                       onPressed: _signInWithGoogle,
-                      icon: Image.asset('assets/google_logo.png', height: 24.0), // You need to add this asset
+                      icon: Image.asset('assets/google_logo.png',
+                          height: 24.0), // You need to add this asset
                       label: const Text('Sign in with Google'),
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 24),
                         textStyle: const TextStyle(fontSize: 16),
                       ),
                     ),
@@ -77,3 +83,4 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
+

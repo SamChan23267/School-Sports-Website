@@ -13,8 +13,6 @@ import 'login_page.dart'; // Import the new login page
 import 'auth_service.dart'; // Import the auth service
 
 void main() {
-  // We no longer need main to be async.
-  // Initialization is handled in the MyApp widget.
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
@@ -28,7 +26,6 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.dark;
-  // This future will hold the result of the Firebase initialization.
   final Future<FirebaseApp> _initialization = Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -61,11 +58,9 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
       ),
       themeMode: _themeMode,
-      // NEW: We use a FutureBuilder to wait for Firebase to initialize.
       home: FutureBuilder(
         future: _initialization,
         builder: (context, snapshot) {
-          // If there's an error, show it.
           if (snapshot.hasError) {
             return Scaffold(
               body: Center(
@@ -74,7 +69,6 @@ class _MyAppState extends State<MyApp> {
             );
           }
 
-          // If initialization is complete, show the LandingPage.
           if (snapshot.connectionState == ConnectionState.done) {
             return LandingPage(
               themeMode: _themeMode,
@@ -82,7 +76,6 @@ class _MyAppState extends State<MyApp> {
             );
           }
 
-          // Otherwise, show a loading indicator.
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
@@ -112,7 +105,11 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   AppView _currentView = AppView.upcomingFixtures;
-  final AuthService _authService = AuthService(); // Instance of AuthService
+  
+  // --- Correction Start ---
+  // Access the single, shared instance of AuthService.
+  final AuthService _authService = AuthService.instance;
+  // --- Correction End ---
 
   String get _currentViewTitle {
     switch (_currentView) {
@@ -144,7 +141,6 @@ class _LandingPageState extends State<LandingPage> {
             child: const Text('Contact Us'),
           ),
           const SizedBox(width: 8),
-          // We use a StreamBuilder to listen to auth changes
           StreamBuilder<User?>(
             stream: _authService.user,
             builder: (context, snapshot) {
@@ -154,11 +150,11 @@ class _LandingPageState extends State<LandingPage> {
                   child: SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   ),
                 );
               }
-              // If user is logged in, show their info and a logout button
               if (snapshot.hasData && snapshot.data != null) {
                 final user = snapshot.data!;
                 return PopupMenuButton<String>(
@@ -167,9 +163,10 @@ class _LandingPageState extends State<LandingPage> {
                       _authService.signOut();
                     }
                   },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<String>>[
                     PopupMenuItem<String>(
-                      enabled: false, // Make it not clickable
+                      enabled: false,
                       child: Row(
                         children: [
                           CircleAvatar(
@@ -196,7 +193,6 @@ class _LandingPageState extends State<LandingPage> {
                   ),
                 );
               }
-              // If user is not logged in, show the login button
               return OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
