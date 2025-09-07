@@ -11,7 +11,7 @@ class RugbyUnionApiService {
   factory RugbyUnionApiService() => _instance;
   RugbyUnionApiService._internal();
 
-  static const String _proxyBaseUrl = "http://localhost:9999";
+  static const String _proxyBaseUrl = "https://shc-proxy-server.onrender.com";
   static const String _rugbyUnionApiUrl = "https://rugby-au-cms.graphcdn.app/";
   
   static final Map<String, String> _headers = {

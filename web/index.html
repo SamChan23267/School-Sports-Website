@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -34,5 +21,23 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+    
+    // Your web app's Firebase configuration, taken directly from your project settings.
+    const firebaseConfig = {
+      apiKey: "AIzaSyBw93e3jl2E_uTI9vnrFdO8j3rfrEpTIpQ",
+      authDomain: "school-sports-portal.firebaseapp.com",
+      projectId: "school-sports-portal",
+      storageBucket: "school-sports-portal.firebasestorage.app",
+      messagingSenderId: "901868140405",
+      appId: "1:901868140405:web:58682f2afed672ce2d053c",
+      measurementId: "G-PH506WN857"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+  </script>
 </body>
 </html>
