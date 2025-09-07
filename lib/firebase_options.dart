@@ -89,4 +89,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'school-sports-portal.firebasestorage.app',
     measurementId: 'G-36PC39PMV7',
   );
+
 }

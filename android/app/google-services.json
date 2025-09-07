@@ -37,6 +37,13 @@
             {
               "client_id": "901868140405-qe2qggjn1sll0ec6g3k53l65p75al8lm.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "901868140405-12advup67o94265iqit884ud4i1q4r9g.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.sportsFixturesApp"
+              }
             }
           ]
         }

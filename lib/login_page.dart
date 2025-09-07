@@ -1,7 +1,7 @@
 // lib/login_page.dart
 
 import 'package:flutter/material.dart';
-import 'auth_service.dart'; // Import the new auth service
+import 'services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,38 +11,40 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Access the single, shared instance of AuthService instead of creating a new one.
   final AuthService _authService = AuthService.instance;
-
   bool _isLoading = false;
 
-  void _signInWithGoogle() async {
-    if (_isLoading) return; // Prevent double-clicks
+  /// --- UPDATED SIGN-IN LOGIC ---
+  void _signIn() async {
+    if (_isLoading) return;
 
     setState(() {
       _isLoading = true;
     });
 
+    // Call the new method that uses a popup.
     final userCredential = await _authService.signInWithGoogle();
 
-    if (mounted) {
+    // This check is important to prevent errors if the user navigates away
+    // while the async sign-in operation is in progress.
+    if (!mounted) return;
+
+    // After the popup closes, check if we got a valid user.
+    if (userCredential?.user != null) {
+      // If sign-in was successful, close the login page.
+      // The UserProvider listening to the auth stream will handle updating the UI.
+      Navigator.of(context).pop();
+    } else {
+      // This handles cases where the user closes the popup or an error occurs.
       setState(() {
         _isLoading = false;
       });
-
-      if (userCredential != null) {
-        // If sign-in is successful, pop the login page off the stack
-        // to return to the previous screen (LandingPage).
-        Navigator.of(context).pop();
-      } else {
-        // Handle sign-in failure
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google Sign-In Failed. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign-in was cancelled.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -66,9 +68,10 @@ class _LoginPageState extends State<LoginPage> {
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton.icon(
-                      onPressed: _signInWithGoogle,
-                      icon: Image.asset('assets/google_logo.png',
-                          height: 24.0), // You need to add this asset
+                      onPressed: _signIn,
+                      // You might need to add the google_logo.png to an assets folder
+                      // and declare it in your pubspec.yaml
+                      icon: Image.asset('assets/google_logo.png', height: 24.0),
                       label: const Text('Sign in with Google'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(

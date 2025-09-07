@@ -1,10 +1,10 @@
-// lib/api_service.dart
+// lib/services/api_service.dart
 
 import 'package:flutter/material.dart';
-import 'models.dart';
-import 'services/collegesport_api_service.dart';
-import 'services/rugbyunion_api_service.dart';
-import 'services/playhq_api_service.dart';
+import '../models.dart';
+import 'collegesport_api_service.dart';
+import 'rugbyunion_api_service.dart';
+import 'playhq_api_service.dart';
 
 class ApiService {
   final CollegeSportApiService _collegeSportApi = CollegeSportApiService();

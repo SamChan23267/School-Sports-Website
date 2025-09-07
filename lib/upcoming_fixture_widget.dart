@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'api_service.dart';
+import 'services/api_service.dart';
 import 'models.dart';
 import 'fixture_detail_screen.dart'; 
 

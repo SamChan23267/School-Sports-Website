@@ -1,20 +1,38 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
-import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
-import 'firebase_options.dart'; // Import generated options
-import 'upcoming_fixture_widget.dart';
-import 'api_service.dart';
-import 'models.dart';
-import 'contact_us_page.dart';
-import 'login_page.dart'; // Import the new login page
-import 'auth_service.dart'; // Import the auth service
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
+import 'package:provider/provider.dart';
 
-void main() {
+import 'firebase_options.dart';
+import 'upcoming_fixture_widget.dart';
+import 'contact_us_page.dart';
+import 'login_page.dart';
+import 'admin_page.dart';
+import 'services/api_service.dart';
+import 'models.dart';
+import 'models/user_model.dart';
+import 'services/auth_service.dart';
+import 'providers/user_provider.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
+  // --- END FIX ---
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => UserProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -26,9 +44,6 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.dark;
-  final Future<FirebaseApp> _initialization = Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 
   void _toggleTheme() {
     setState(() {
@@ -51,35 +66,22 @@ class _MyAppState extends State<MyApp> {
         colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.deepPurple, brightness: Brightness.dark),
         scaffoldBackgroundColor: const Color(0xFF181A20),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF23272F),
-          foregroundColor: Colors.white,
-        ),
         useMaterial3: true,
       ),
       themeMode: _themeMode,
       home: FutureBuilder(
-        future: _initialization,
+        future: Provider.of<UserProvider>(context, listen: false).onInitializationComplete,
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Scaffold(
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
               body: Center(
-                child: Text('Error initializing Firebase: ${snapshot.error}'),
+                child: CircularProgressIndicator(),
               ),
             );
           }
-
-          if (snapshot.connectionState == ConnectionState.done) {
-            return LandingPage(
-              themeMode: _themeMode,
-              onToggleTheme: _toggleTheme,
-            );
-          }
-
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+          return LandingPage(
+            themeMode: _themeMode,
+            onToggleTheme: _toggleTheme,
           );
         },
       ),
@@ -87,6 +89,7 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
+// ... The rest of the file (LandingPage, SportsListColumn, etc.) remains the same.
 enum AppView { upcomingFixtures, results, selectTeam }
 
 class LandingPage extends StatefulWidget {
@@ -105,11 +108,7 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   AppView _currentView = AppView.upcomingFixtures;
-  
-  // --- Correction Start ---
-  // Access the single, shared instance of AuthService.
   final AuthService _authService = AuthService.instance;
-  // --- Correction End ---
 
   String get _currentViewTitle {
     switch (_currentView) {
@@ -124,161 +123,169 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_currentViewTitle),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ContactUsPage()),
-              );
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Contact Us'),
-          ),
-          const SizedBox(width: 8),
-          StreamBuilder<User?>(
-            stream: _authService.user,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  ),
-                );
-              }
-              if (snapshot.hasData && snapshot.data != null) {
-                final user = snapshot.data!;
-                return PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'logout') {
-                      _authService.signOut();
-                    }
-                  },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                    PopupMenuItem<String>(
-                      enabled: false,
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundImage: NetworkImage(user.photoURL ?? ''),
-                            radius: 15,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(user.displayName ?? 'User'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem<String>(
-                      value: 'logout',
-                      child: Text('Logout'),
-                    ),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: CircleAvatar(
-                      backgroundImage: NetworkImage(user.photoURL ?? ''),
-                      radius: 18,
-                    ),
-                  ),
-                );
-              }
-              return OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18)),
-                ),
+    return Consumer<UserProvider>(
+      builder: (context, userProvider, child) {
+        final userModel = userProvider.userModel;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(_currentViewTitle),
+            actions: [
+              TextButton(
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                    MaterialPageRoute(
+                        builder: (context) => const ContactUsPage()),
                   );
                 },
-                child: const Text(
-                  'Login',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
                 ),
-              );
-            },
-          ),
-          const SizedBox(width: 14),
-          IconButton(
-            tooltip: "Toggle dark mode",
-            icon: Icon(
-              widget.themeMode == ThemeMode.dark
-                  ? Icons.nightlight_round
-                  : Icons.wb_sunny,
-            ),
-            onPressed: widget.onToggleTheme,
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+                child: const Text('Contact Us'),
               ),
-              child: const Text(
-                'Menu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
+              const SizedBox(width: 8),
+              StreamBuilder<User?>(
+                stream: _authService.user,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white)),
+                    );
+                  }
+                  if (snapshot.hasData && snapshot.data != null) {
+                    final user = snapshot.data!;
+                    return PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'logout') {
+                          _authService.signOut();
+                        }
+                      },
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          enabled: false,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundImage:
+                                    NetworkImage(user.photoURL ?? ''),
+                                radius: 15,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(user.displayName ?? 'User'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem<String>(
+                          value: 'logout',
+                          child: Text('Logout'),
+                        ),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: CircleAvatar(
+                          backgroundImage: NetworkImage(user.photoURL ?? ''),
+                          radius: 18,
+                        ),
+                      ),
+                    );
+                  }
+                  return OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18)),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const LoginPage()),
+                      );
+                    },
+                    child: const Text('Login',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  );
+                },
+              ),
+              const SizedBox(width: 14),
+              IconButton(
+                tooltip: "Toggle dark mode",
+                icon: Icon(
+                  widget.themeMode == ThemeMode.dark
+                      ? Icons.nightlight_round
+                      : Icons.wb_sunny,
                 ),
+                onPressed: widget.onToggleTheme,
               ),
+              const SizedBox(width: 16),
+            ],
+          ),
+          drawer: Drawer(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                DrawerHeader(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  child: const Text('Menu',
+                      style: TextStyle(color: Colors.white, fontSize: 24)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: const Text('Upcoming Fixtures'),
+                  selected: _currentView == AppView.upcomingFixtures,
+                  onTap: () {
+                    setState(() => _currentView = AppView.upcomingFixtures);
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.emoji_events),
+                  title: const Text('Results'),
+                  selected: _currentView == AppView.results,
+                  onTap: () {
+                    setState(() => _currentView = AppView.results);
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.group_work),
+                  title: const Text('Select Team'),
+                  selected: _currentView == AppView.selectTeam,
+                  onTap: () {
+                    setState(() => _currentView = AppView.selectTeam);
+                    Navigator.pop(context);
+                  },
+                ),
+                if (userModel != null && userModel.appRole == 'admin')
+                  ListTile(
+                    leading: const Icon(Icons.admin_panel_settings),
+                    title: const Text('Admin Panel'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const AdminPage()),
+                      );
+                    },
+                  ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.calendar_today),
-              title: const Text('Upcoming Fixtures'),
-              selected: _currentView == AppView.upcomingFixtures,
-              onTap: () {
-                setState(() {
-                  _currentView = AppView.upcomingFixtures;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.emoji_events),
-              title: const Text('Results'),
-              selected: _currentView == AppView.results,
-              onTap: () {
-                setState(() {
-                  _currentView = AppView.results;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.group_work),
-              title: const Text('Select Team'),
-              selected: _currentView == AppView.selectTeam,
-              onTap: () {
-                setState(() {
-                  _currentView = AppView.selectTeam;
-                });
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      ),
-      body: _buildCurrentView(),
+          ),
+          body: _buildCurrentView(),
+        );
+      },
     );
   }
 
@@ -318,7 +325,6 @@ class _LandingPageState extends State<LandingPage> {
   }
 }
 
-
 class SportsListColumn extends StatefulWidget {
   const SportsListColumn({super.key});
 
@@ -328,7 +334,7 @@ class SportsListColumn extends StatefulWidget {
 
 class _SportsListColumnState extends State<SportsListColumn> {
   final ApiService _apiService = ApiService();
-  
+
   String? _selectedSport;
   String? _selectedTeam;
   Future<List<String>>? _teamsFuture;
@@ -349,53 +355,47 @@ class _SportsListColumnState extends State<SportsListColumn> {
     setState(() {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName, sportName);
-      
+
       _standingsFuture = _teamFixturesFuture!.then((fixtures) async {
         if (fixtures.isEmpty) {
           return <StandingsTable>[];
         }
-
-        // Use a safer method to find the first non-CollegeSport fixture
-        final nonCollegeSportFixtures = fixtures.where((f) => f.source != DataSource.collegeSport);
-        final Fixture? nonCollegeSportFixture = nonCollegeSportFixtures.isNotEmpty ? nonCollegeSportFixtures.first : null;
+        final nonCollegeSportFixtures =
+            fixtures.where((f) => f.source != DataSource.collegeSport);
+        final Fixture? nonCollegeSportFixture =
+            nonCollegeSportFixtures.isNotEmpty
+                ? nonCollegeSportFixtures.first
+                : null;
 
         if (nonCollegeSportFixture != null) {
-            return _apiService.getStandings(
-                nonCollegeSportFixture.competitionId,
-                nonCollegeSportFixture.gradeId ?? 0,
-                nonCollegeSportFixture.source,
-            );
+          return _apiService.getStandings(
+            nonCollegeSportFixture.competitionId,
+            nonCollegeSportFixture.gradeId ?? 0,
+            nonCollegeSportFixture.source,
+          );
         }
-
-        // For CollegeSport, find all possible fixtures that could lead to a standings table.
-        final possibleFixtures = fixtures.where(
-            (f) => f.source == DataSource.collegeSport && f.gradeId != null && f.gradeId != 0
-        ).toList();
+        final possibleFixtures = fixtures
+            .where((f) =>
+                f.source == DataSource.collegeSport &&
+                f.gradeId != null &&
+                f.gradeId != 0)
+            .toList();
 
         if (possibleFixtures.isEmpty) {
-            print("No CollegeSport fixtures with a valid gradeId found for team: $_selectedTeam");
-            return <StandingsTable>[];
+          return <StandingsTable>[];
         }
-
-        // Try each possible fixture until we get a successful result.
         for (final fixture in possibleFixtures) {
-            try {
-                final standings = await _apiService.getStandings(
-                    fixture.competitionId,
-                    fixture.gradeId!, // Not null due to the 'where' filter above
-                    fixture.source
-                );
-                // If we get a result, return it immediately.
-                if (standings.isNotEmpty) {
-                    return standings;
-                }
-            } catch (e) {
-                print("Could not get standings for compId ${fixture.competitionId}, gradeId ${fixture.gradeId}. Trying next. Error: $e");
+          try {
+            final standings = await _apiService.getStandings(
+                fixture.competitionId, fixture.gradeId!, fixture.source);
+            if (standings.isNotEmpty) {
+              return standings;
             }
+          } catch (e) {
+            print(
+                "Could not get standings for compId ${fixture.competitionId}, gradeId ${fixture.gradeId}. Trying next. Error: $e");
+          }
         }
-
-        // If we loop through all possibilities and find nothing, return an empty list.
-        print("Could not find any standings for team: $_selectedTeam after trying all possible fixtures.");
         return <StandingsTable>[];
       });
     });
@@ -589,7 +589,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
       },
     );
   }
-  
+
   Widget _buildTeamDetails() {
     return Column(
       children: [
@@ -673,7 +673,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Text(
-                'Could not load standings data.\nPlease check the network connection and try again.\n\nError: ${snapshot.error}',
+                'Could not load standings data.\nPlease check your connection and try again.\n\nError: ${snapshot.error}',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -688,9 +688,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
           itemCount: tables.length,
           itemBuilder: (context, index) {
             final table = tables[index];
-            final title = (table.gradeName.isNotEmpty && table.gradeName != table.sectionName)
-              ? '${table.gradeName} - ${table.sectionName}'
-              : table.sectionName;
+            final title = (table.gradeName.isNotEmpty &&
+                    table.gradeName != table.sectionName)
+                ? '${table.gradeName} - ${table.sectionName}'
+                : table.sectionName;
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
               child: Padding(
@@ -724,19 +725,21 @@ class _SportsListColumnState extends State<SportsListColumn> {
                           DataColumn(label: Text('GD'), numeric: true),
                           DataColumn(label: Text('Pts'), numeric: true),
                         ],
-                        rows: table.standings.map((s) => DataRow(cells: [
-                          DataCell(Text(s.teamName)), 
-                          DataCell(Text(s.played.toString())),
-                          DataCell(Text(s.win.toString())),
-                          DataCell(Text(s.loss.toString())),
-                          DataCell(Text(s.draw.toString())),
-                          DataCell(Text(s.byes.toString())),
-                          DataCell(Text(s.bonus.toString())),
-                          DataCell(Text(s.pointsFor.toString())),
-                          DataCell(Text(s.pointsAgainst.toString())),
-                          DataCell(Text(s.differential.toString())),
-                          DataCell(Text(s.total.toString())),
-                        ])).toList(),
+                        rows: table.standings
+                            .map((s) => DataRow(cells: [
+                                  DataCell(Text(s.teamName)),
+                                  DataCell(Text(s.played.toString())),
+                                  DataCell(Text(s.win.toString())),
+                                  DataCell(Text(s.loss.toString())),
+                                  DataCell(Text(s.draw.toString())),
+                                  DataCell(Text(s.byes.toString())),
+                                  DataCell(Text(s.bonus.toString())),
+                                  DataCell(Text(s.pointsFor.toString())),
+                                  DataCell(Text(s.pointsAgainst.toString())),
+                                  DataCell(Text(s.differential.toString())),
+                                  DataCell(Text(s.total.toString())),
+                                ]))
+                            .toList(),
                       ),
                     ),
                   ],
@@ -750,7 +753,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
   }
 }
 
-// This is a private helper widget to avoid scope issues.
 class _TeamDisplay extends StatelessWidget {
   final String school;
   final String team;
@@ -773,19 +775,25 @@ class _TeamDisplay extends StatelessWidget {
           Text(
             school,
             style: Theme.of(context).textTheme.bodySmall,
-            textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+            textAlign: alignment == CrossAxisAlignment.start
+                ? TextAlign.left
+                : TextAlign.right,
           ),
         if (!isCricket) const SizedBox(height: 2),
         Text(
           team,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          textAlign: alignment == CrossAxisAlignment.start ? TextAlign.left : TextAlign.right,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: alignment == CrossAxisAlignment.start
+              ? TextAlign.left
+              : TextAlign.right,
         ),
       ],
     );
   }
 }
-
 
 class _FixtureResultCard extends StatelessWidget {
   final Fixture fixture;
@@ -793,8 +801,9 @@ class _FixtureResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasScore = (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) || 
-                          (fixture.awayScore != null && fixture.awayScore!.isNotEmpty);
+    final bool hasScore =
+        (fixture.homeScore != null && fixture.homeScore!.isNotEmpty) ||
+            (fixture.awayScore != null && fixture.awayScore!.isNotEmpty);
     final bool isFinished = hasScore || fixture.resultStatus != 0;
 
     final homeScore = fixture.homeScore ?? '';
@@ -810,11 +819,11 @@ class _FixtureResultCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              DateFormat('EEE, d MMM yy - hh:mm a').format(DateTime.parse(fixture.dateTime)),
+              DateFormat('EEE, d MMM yy - hh:mm a')
+                  .format(DateTime.parse(fixture.dateTime)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -829,15 +838,23 @@ class _FixtureResultCard extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                  child: isFinished 
-                    ? Text(
-                        '$homeScore - $awayScore',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: scoreColor),
-                      )
-                    : Text(
-                        'vs',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey),
-                      ),
+                  child: isFinished
+                      ? Text(
+                          '$homeScore - $awayScore',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: scoreColor),
+                        )
+                      : Text(
+                          'vs',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(color: Colors.grey),
+                        ),
                 ),
                 Expanded(
                   child: _TeamDisplay(
@@ -849,7 +866,6 @@ class _FixtureResultCard extends StatelessWidget {
                 ),
               ],
             ),
-            
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -871,3 +887,4 @@ class _FixtureResultCard extends StatelessWidget {
     );
   }
 }
+
