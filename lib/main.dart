@@ -1,8 +1,8 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
@@ -10,11 +10,12 @@ import 'upcoming_fixture_widget.dart';
 import 'contact_us_page.dart';
 import 'login_page.dart';
 import 'admin_page.dart';
+import 'teacher_panel_page.dart';
+import 'student_panel_page.dart';
 import 'services/api_service.dart';
 import 'models.dart';
-import 'models/user_model.dart';
-import 'services/auth_service.dart';
 import 'providers/user_provider.dart';
+import 'services/firestore_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,12 +25,15 @@ Future<void> main() async {
 
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
-  // --- END FIX ---
 
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => UserProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => UserProvider()),
+        Provider(create: (context) => FirestoreService()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -70,7 +74,8 @@ class _MyAppState extends State<MyApp> {
       ),
       themeMode: _themeMode,
       home: FutureBuilder(
-        future: Provider.of<UserProvider>(context, listen: false).onInitializationComplete,
+        future: Provider.of<UserProvider>(context, listen: false)
+            .onInitializationComplete,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
@@ -89,8 +94,7 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-// ... The rest of the file (LandingPage, SportsListColumn, etc.) remains the same.
-enum AppView { upcomingFixtures, results, selectTeam }
+enum AppView { upcomingFixtures, results, selectTeam, myTeams }
 
 class LandingPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -108,7 +112,6 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   AppView _currentView = AppView.upcomingFixtures;
-  final AuthService _authService = AuthService.instance;
 
   String get _currentViewTitle {
     switch (_currentView) {
@@ -118,6 +121,8 @@ class _LandingPageState extends State<LandingPage> {
         return 'Results';
       case AppView.selectTeam:
         return 'Select Team';
+      case AppView.myTeams:
+        return 'My Teams';
     }
   }
 
@@ -140,82 +145,78 @@ class _LandingPageState extends State<LandingPage> {
                   );
                 },
                 style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
+                  foregroundColor:
+                      Theme.of(context).appBarTheme.foregroundColor,
                 ),
                 child: const Text('Contact Us'),
               ),
               const SizedBox(width: 8),
-              StreamBuilder<User?>(
-                stream: _authService.user,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white)),
-                    );
-                  }
-                  if (snapshot.hasData && snapshot.data != null) {
-                    final user = snapshot.data!;
-                    return PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'logout') {
-                          _authService.signOut();
-                        }
-                      },
-                      itemBuilder: (BuildContext context) =>
-                          <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(
-                          enabled: false,
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundImage:
-                                    NetworkImage(user.photoURL ?? ''),
-                                radius: 15,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(user.displayName ?? 'User'),
-                            ],
+              if (userModel != null)
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'logout') {
+                      Provider.of<UserProvider>(context, listen: false)
+                          .signOut();
+                    }
+                  },
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundImage: NetworkImage(userModel.photoURL),
+                            radius: 15,
+                            child: userModel.photoURL.isEmpty
+                                ? const Icon(Icons.person)
+                                : null,
                           ),
-                        ),
-                        const PopupMenuDivider(),
-                        const PopupMenuItem<String>(
-                          value: 'logout',
-                          child: Text('Logout'),
-                        ),
-                      ],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: CircleAvatar(
-                          backgroundImage: NetworkImage(user.photoURL ?? ''),
-                          radius: 18,
-                        ),
+                          const SizedBox(width: 8),
+                          Text(userModel.displayName),
+                        ],
                       ),
-                    );
-                  }
-                  return OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18)),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const LoginPage()),
-                      );
-                    },
-                    child: const Text('Login',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                  );
-                },
-              ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Text('Logout'),
+                    ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: CircleAvatar(
+                      backgroundImage: NetworkImage(userModel.photoURL),
+                      radius: 18,
+                      child: userModel.photoURL.isEmpty
+                          ? const Icon(Icons.person)
+                          : null,
+                    ),
+                  ),
+                )
+              else
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        Theme.of(context).appBarTheme.foregroundColor,
+                    // --- THE FIX: Using a safe fallback color ---
+                    side: BorderSide(
+                        color:
+                            Theme.of(context).appBarTheme.foregroundColor ??
+                                Theme.of(context).colorScheme.onPrimary),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18)),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const LoginPage()),
+                    );
+                  },
+                  child: const Text('Login',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
               const SizedBox(width: 14),
               IconButton(
                 tooltip: "Toggle dark mode",
@@ -237,8 +238,9 @@ class _LandingPageState extends State<LandingPage> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  child: const Text('Menu',
-                      style: TextStyle(color: Colors.white, fontSize: 24)),
+                  child: Text('Menu',
+                      style:
+                          Theme.of(context).primaryTextTheme.headlineMedium),
                 ),
                 ListTile(
                   leading: const Icon(Icons.calendar_today),
@@ -267,6 +269,32 @@ class _LandingPageState extends State<LandingPage> {
                     Navigator.pop(context);
                   },
                 ),
+                if (userModel != null)
+                  ListTile(
+                    leading: const Icon(Icons.group),
+                    title: const Text('My Teams'),
+                    selected: _currentView == AppView.myTeams,
+                    onTap: () {
+                      setState(() => _currentView = AppView.myTeams);
+                      Navigator.pop(context);
+                    },
+                  ),
+                const Divider(),
+                if (userModel != null &&
+                    (userModel.appRole == 'admin' ||
+                        userModel.appRole == 'teacher'))
+                  ListTile(
+                    leading: const Icon(Icons.shield_outlined),
+                    title: const Text('Teacher Panel'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const TeacherPanelPage()),
+                      );
+                    },
+                  ),
                 if (userModel != null && userModel.appRole == 'admin')
                   ListTile(
                     leading: const Icon(Icons.admin_panel_settings),
@@ -301,8 +329,14 @@ class _LandingPageState extends State<LandingPage> {
       case AppView.selectTeam:
         content = const SportsListColumn();
         break;
+      case AppView.myTeams:
+        content = Provider.of<UserProvider>(context).userModel != null
+            ? const StudentPanelPage()
+            : const Center(
+                child: Text("Please log in to see your teams."),
+              );
+        break;
     }
-
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
@@ -334,13 +368,11 @@ class SportsListColumn extends StatefulWidget {
 
 class _SportsListColumnState extends State<SportsListColumn> {
   final ApiService _apiService = ApiService();
-
   String? _selectedSport;
   String? _selectedTeam;
   Future<List<String>>? _teamsFuture;
   Future<List<Fixture>>? _teamFixturesFuture;
   Future<List<StandingsTable>>? _standingsFuture;
-
   int _selectedTabIndex = 0;
   final PageController _pageController = PageController();
 
@@ -355,48 +387,18 @@ class _SportsListColumnState extends State<SportsListColumn> {
     setState(() {
       _selectedTeam = teamName;
       _teamFixturesFuture = _apiService.getFixturesForTeam(teamName, sportName);
-
       _standingsFuture = _teamFixturesFuture!.then((fixtures) async {
-        if (fixtures.isEmpty) {
-          return <StandingsTable>[];
+        if (fixtures.isEmpty) return <StandingsTable>[];
+        final fixtureForStandings = fixtures.first;
+        try {
+          return await _apiService.getStandings(
+              fixtureForStandings.competitionId,
+              fixtureForStandings.gradeId ?? 0,
+              fixtureForStandings.source);
+        } catch (e) {
+          print("Error getting standings: $e");
+          return [];
         }
-        final nonCollegeSportFixtures =
-            fixtures.where((f) => f.source != DataSource.collegeSport);
-        final Fixture? nonCollegeSportFixture =
-            nonCollegeSportFixtures.isNotEmpty
-                ? nonCollegeSportFixtures.first
-                : null;
-
-        if (nonCollegeSportFixture != null) {
-          return _apiService.getStandings(
-            nonCollegeSportFixture.competitionId,
-            nonCollegeSportFixture.gradeId ?? 0,
-            nonCollegeSportFixture.source,
-          );
-        }
-        final possibleFixtures = fixtures
-            .where((f) =>
-                f.source == DataSource.collegeSport &&
-                f.gradeId != null &&
-                f.gradeId != 0)
-            .toList();
-
-        if (possibleFixtures.isEmpty) {
-          return <StandingsTable>[];
-        }
-        for (final fixture in possibleFixtures) {
-          try {
-            final standings = await _apiService.getStandings(
-                fixture.competitionId, fixture.gradeId!, fixture.source);
-            if (standings.isNotEmpty) {
-              return standings;
-            }
-          } catch (e) {
-            print(
-                "Could not get standings for compId ${fixture.competitionId}, gradeId ${fixture.gradeId}. Trying next. Error: $e");
-          }
-        }
-        return <StandingsTable>[];
       });
     });
   }
@@ -414,8 +416,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
       _selectedSport = null;
       _selectedTeam = null;
       _teamsFuture = null;
-      _teamFixturesFuture = null;
-      _standingsFuture = null;
     });
   }
 
@@ -432,67 +432,30 @@ class _SportsListColumnState extends State<SportsListColumn> {
       children: [
         _buildHeader(),
         const SizedBox(height: 20),
-        Expanded(
-          child: _buildContent(),
-        ),
+        Expanded(child: _buildContent()),
       ],
     );
   }
 
   Widget _buildHeader() {
     if (_selectedSport == null) {
-      return Text(
-        "Sports",
-        style: TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      );
+      return Text("Sports", style: Theme.of(context).textTheme.headlineMedium);
     } else if (_selectedTeam == null) {
-      return Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: _onBackToSports,
-            tooltip: "Back to Sports",
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _selectedSport!,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      );
+      return Row(children: [
+        IconButton(
+            icon: const Icon(Icons.arrow_back), onPressed: _onBackToSports),
+        Expanded(
+            child: Text(_selectedSport!,
+                style: Theme.of(context).textTheme.headlineMedium)),
+      ]);
     } else {
-      return Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: _onBackToTeams,
-            tooltip: "Back to Teams",
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _selectedTeam!,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      );
+      return Row(children: [
+        IconButton(
+            icon: const Icon(Icons.arrow_back), onPressed: _onBackToTeams),
+        Expanded(
+            child: Text(_selectedTeam!,
+                style: Theme.of(context).textTheme.headlineMedium)),
+      ]);
     }
   }
 
@@ -513,12 +476,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
+        if (snapshot.hasError)
           return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
           return const Center(child: Text('No sports found.'));
-        }
 
         final sports = snapshot.data!;
         return ListView.builder(
@@ -527,23 +488,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
             final sport = sports[index];
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8),
-              elevation: 0,
-              color: Theme.of(context)
-                  .colorScheme
-                  .secondaryContainer
-                  .withOpacity(0.8),
               child: ListTile(
-                leading: Text(
-                  sport.icon,
-                  style: const TextStyle(fontSize: 32),
-                ),
-                title: Text(
-                  sport.name,
-                  style: const TextStyle(fontSize: 18),
-                ),
+                leading: Text(sport.icon, style: const TextStyle(fontSize: 32)),
+                title: Text(sport.name, style: const TextStyle(fontSize: 18)),
                 onTap: () => _onSportSelected(sport.name),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
               ),
             );
           },
@@ -559,12 +507,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
+        if (snapshot.hasError)
           return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('No teams found for this sport.'));
-        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
+          return const Center(child: Text('No teams found.'));
 
         final teams = snapshot.data!;
         return ListView.builder(
@@ -574,14 +520,8 @@ class _SportsListColumnState extends State<SportsListColumn> {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
                 onPressed: () => _onTeamSelected(teamName, _selectedSport!),
-                child: Text(teamName, textAlign: TextAlign.center),
+                child: Text(teamName),
               ),
             );
           },
@@ -591,8 +531,37 @@ class _SportsListColumnState extends State<SportsListColumn> {
   }
 
   Widget _buildTeamDetails() {
+    final userProvider = context.watch<UserProvider>();
+    final userModel = userProvider.userModel;
+    final isFollowed =
+        userModel?.followedTeams.contains(_selectedTeam!) ?? false;
+
     return Column(
       children: [
+        if (userModel != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                final firestoreService = context.read<FirestoreService>();
+                if (isFollowed) {
+                  firestoreService.unfollowTeam(
+                      userModel.uid, _selectedTeam!);
+                } else {
+                  firestoreService.followTeam(userModel.uid, _selectedTeam!);
+                }
+              },
+              icon: Icon(isFollowed ? Icons.star : Icons.star_border,
+                  color: isFollowed ? Colors.amber : null),
+              label: Text(isFollowed ? 'Following' : 'Follow'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isFollowed
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : null,
+              ),
+            ),
+          ),
+        const SizedBox(height: 16),
         ToggleButtons(
           isSelected: [_selectedTabIndex == 0, _selectedTabIndex == 1],
           onPressed: (index) {
@@ -608,24 +577,19 @@ class _SportsListColumnState extends State<SportsListColumn> {
           borderRadius: BorderRadius.circular(8),
           children: const [
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Text('Fixtures & Results'),
-            ),
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text('Fixtures & Results')),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Text('Standings'),
-            ),
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text('Standings')),
           ],
         ),
         const SizedBox(height: 16),
         Expanded(
           child: PageView(
             controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _selectedTabIndex = index;
-              });
-            },
+            onPageChanged: (index) =>
+                setState(() => _selectedTabIndex = index),
             children: [
               _buildFixturesContent(),
               _buildStandingsContent(),
@@ -640,22 +604,18 @@ class _SportsListColumnState extends State<SportsListColumn> {
     return FutureBuilder<List<Fixture>>(
       future: _teamFixturesFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
+        if (snapshot.hasError)
           return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
           return const Center(child: Text('No fixtures found.'));
-        }
 
         final fixtures = snapshot.data!;
         return ListView.builder(
           itemCount: fixtures.length,
-          itemBuilder: (context, index) {
-            return _FixtureResultCard(fixture: fixtures[index]);
-          },
+          itemBuilder: (context, index) =>
+              _FixtureResultCard(fixture: fixtures[index]),
         );
       },
     );
@@ -665,84 +625,42 @@ class _SportsListColumnState extends State<SportsListColumn> {
     return FutureBuilder<List<StandingsTable>>(
       future: _standingsFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
+        if (snapshot.hasError)
           return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Could not load standings data.\nPlease check your connection and try again.\n\nError: ${snapshot.error}',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          );
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              child: Text('Could not load standings: ${snapshot.error}'));
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
           return const Center(child: Text('No standings available.'));
-        }
 
         final tables = snapshot.data!;
         return ListView.builder(
           itemCount: tables.length,
           itemBuilder: (context, index) {
             final table = tables[index];
-            final title = (table.gradeName.isNotEmpty &&
-                    table.gradeName != table.sectionName)
-                ? '${table.gradeName} - ${table.sectionName}'
-                : table.sectionName;
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowHeight: 40,
-                        dataRowMinHeight: 35,
-                        dataRowMaxHeight: 40,
-                        columns: const [
-                          DataColumn(label: Text('Team')),
-                          DataColumn(label: Text('P'), numeric: true),
-                          DataColumn(label: Text('W'), numeric: true),
-                          DataColumn(label: Text('L'), numeric: true),
-                          DataColumn(label: Text('D'), numeric: true),
-                          DataColumn(label: Text('B'), numeric: true),
-                          DataColumn(label: Text('BP'), numeric: true),
-                          DataColumn(label: Text('PF'), numeric: true),
-                          DataColumn(label: Text('PA'), numeric: true),
-                          DataColumn(label: Text('GD'), numeric: true),
-                          DataColumn(label: Text('Pts'), numeric: true),
-                        ],
-                        rows: table.standings
-                            .map((s) => DataRow(cells: [
-                                  DataCell(Text(s.teamName)),
-                                  DataCell(Text(s.played.toString())),
-                                  DataCell(Text(s.win.toString())),
-                                  DataCell(Text(s.loss.toString())),
-                                  DataCell(Text(s.draw.toString())),
-                                  DataCell(Text(s.byes.toString())),
-                                  DataCell(Text(s.bonus.toString())),
-                                  DataCell(Text(s.pointsFor.toString())),
-                                  DataCell(Text(s.pointsAgainst.toString())),
-                                  DataCell(Text(s.differential.toString())),
-                                  DataCell(Text(s.total.toString())),
-                                ]))
-                            .toList(),
-                      ),
-                    ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('Team')),
+                    DataColumn(label: Text('P')),
+                    DataColumn(label: Text('W')),
+                    DataColumn(label: Text('L')),
+                    DataColumn(label: Text('D')),
+                    DataColumn(label: Text('Pts')),
                   ],
+                  rows: table.standings
+                      .map((s) => DataRow(cells: [
+                            DataCell(Text(s.teamName)),
+                            DataCell(Text(s.played.toString())),
+                            DataCell(Text(s.win.toString())),
+                            DataCell(Text(s.loss.toString())),
+                            DataCell(Text(s.draw.toString())),
+                            DataCell(Text(s.total.toString())),
+                          ]))
+                      .toList(),
                 ),
               ),
             );

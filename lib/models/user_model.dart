@@ -1,9 +1,11 @@
+// lib/models/user_model.dart
 class UserModel {
   final String uid;
   final String displayName;
   final String email;
   final String photoURL;
   final String appRole;
+  final List<String> followedTeams; // List of followed public team names
 
   UserModel({
     required this.uid,
@@ -11,9 +13,9 @@ class UserModel {
     required this.email,
     required this.photoURL,
     required this.appRole,
+    required this.followedTeams,
   });
 
-  // This factory constructor correctly deserializes a map from Firestore.
   factory UserModel.fromFirestore(Map<String, dynamic> data) {
     return UserModel(
       uid: data['uid'] ?? '',
@@ -21,7 +23,8 @@ class UserModel {
       email: data['email'] ?? 'No Email',
       photoURL: data['photoURL'] ?? '',
       appRole: data['appRole'] ?? 'student',
+      // Ensure followedTeams is correctly parsed from Firestore
+      followedTeams: List<String>.from(data['followedTeams'] ?? []),
     );
   }
 }
-
