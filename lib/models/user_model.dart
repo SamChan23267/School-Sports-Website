@@ -5,7 +5,7 @@ class UserModel {
   final String email;
   final String photoURL;
   final String appRole;
-  final List<String> followedTeams; // List of followed public team names
+  final List<String> followedTeams; // Will now store composite IDs like "Sport::TeamName"
 
   UserModel({
     required this.uid,
@@ -23,8 +23,8 @@ class UserModel {
       email: data['email'] ?? 'No Email',
       photoURL: data['photoURL'] ?? '',
       appRole: data['appRole'] ?? 'student',
-      // Ensure followedTeams is correctly parsed from Firestore
       followedTeams: List<String>.from(data['followedTeams'] ?? []),
     );
   }
 }
+
