@@ -120,7 +120,7 @@ class _LandingPageState extends State<LandingPage> {
       case AppView.results:
         return 'Results';
       case AppView.selectTeam:
-        return 'Select Team';
+        return 'Select a Team';
       case AppView.myTeams:
         return 'My Teams';
     }
@@ -199,7 +199,6 @@ class _LandingPageState extends State<LandingPage> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor:
                         Theme.of(context).appBarTheme.foregroundColor,
-                    // --- THE FIX: Using a safe fallback color ---
                     side: BorderSide(
                         color:
                             Theme.of(context).appBarTheme.foregroundColor ??
@@ -210,8 +209,7 @@ class _LandingPageState extends State<LandingPage> {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) => const LoginPage()),
+                      MaterialPageRoute(builder: (context) => const LoginPage()),
                     );
                   },
                   child: const Text('Login',
@@ -303,8 +301,7 @@ class _LandingPageState extends State<LandingPage> {
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (context) => const AdminPage()),
+                        MaterialPageRoute(builder: (context) => const AdminPage()),
                       );
                     },
                   ),
@@ -533,8 +530,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
   Widget _buildTeamDetails() {
     final userProvider = context.watch<UserProvider>();
     final userModel = userProvider.userModel;
-    final isFollowed =
-        userModel?.followedTeams.contains(_selectedTeam!) ?? false;
+
+    // --- THE FIX: Create unique ID and check against it ---
+    final uniqueTeamId = '${_selectedSport!}::${_selectedTeam!}';
+    final isFollowed = userModel?.followedTeams.contains(uniqueTeamId) ?? false;
 
     return Column(
       children: [
@@ -544,11 +543,13 @@ class _SportsListColumnState extends State<SportsListColumn> {
             child: ElevatedButton.icon(
               onPressed: () {
                 final firestoreService = context.read<FirestoreService>();
+                // --- THE FIX: Pass all required arguments ---
                 if (isFollowed) {
                   firestoreService.unfollowTeam(
-                      userModel.uid, _selectedTeam!);
+                      userModel.uid, _selectedSport!, _selectedTeam!);
                 } else {
-                  firestoreService.followTeam(userModel.uid, _selectedTeam!);
+                  firestoreService.followTeam(
+                      userModel.uid, _selectedSport!, _selectedTeam!);
                 }
               },
               icon: Icon(isFollowed ? Icons.star : Icons.star_border,
