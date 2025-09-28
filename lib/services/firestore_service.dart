@@ -87,6 +87,14 @@ class FirestoreService {
       return snapshot.docs.map((doc) => TeamModel.fromFirestore(doc)).toList();
     });
   }
+  
+  // **NEW FUNCTION** to get a stream of a single team's updates
+  Stream<TeamModel> getTeamStream(String teamId) {
+    return _db.collection('teams').doc(teamId).snapshots().map((snapshot) {
+      return TeamModel.fromFirestore(snapshot);
+    });
+  }
+
 
   /// Fetches all teams from the database. This is used for the Admin Panel.
   Future<List<TeamModel>> getAllTeams() async {

@@ -37,52 +37,85 @@ class _TeamDetailPageState extends State<TeamDetailPage>
 
   @override
   Widget build(BuildContext context) {
+    final firestoreService = context.read<FirestoreService>();
     final userModel = context.watch<UserProvider>().userModel;
+    
     if (userModel == null) {
       return const Scaffold(
           body: Center(child: Text("Please log in to view team details.")));
     }
 
-    final userTeamRole = widget.team.members[userModel.uid] ?? 'member';
-    final canManage = userTeamRole == 'owner' || userTeamRole == 'headCoach';
+    return StreamBuilder<TeamModel>(
+      // **FIX**: Listen to live updates for the team
+      stream: firestoreService.getTeamStream(widget.team.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Scaffold(body: Center(child: Text("Error loading team data or team not found.")));
+        }
+        
+        final team = snapshot.data!;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.team.teamName),
-        actions: [
-          if (canManage)
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: 'Team Settings',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TeamSettingsPage(team: widget.team),
-                  ),
-                );
-              },
+        // **FIX**: Check for membership before showing content
+        if (!team.members.containsKey(userModel.uid)) {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Access Denied")),
+            body: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "You are not a member of this team and cannot view its details.",
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.announcement), text: 'Announcements'),
-            Tab(icon: Icon(Icons.event), text: 'Events'),
-            Tab(icon: Icon(Icons.photo_library), text: 'Gallery'),
-            Tab(icon: Icon(Icons.people), text: 'Roster'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _AnnouncementsTab(team: widget.team, canManage: canManage),
-          _EventsTab(team: widget.team, canManage: canManage),
-          const _FeatureComingSoonTab(featureName: 'Gallery'),
-          _RosterTab(team: widget.team, canManage: canManage),
-        ],
-      ),
+          );
+        }
+
+        final userTeamRole = team.members[userModel.uid] ?? 'member';
+        final canManage = userTeamRole == 'owner' || userTeamRole == 'headCoach';
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(team.teamName), // Use live team name
+            actions: [
+              if (canManage)
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  tooltip: 'Team Settings',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TeamSettingsPage(team: team),
+                      ),
+                    );
+                  },
+                ),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(icon: Icon(Icons.announcement), text: 'Announcements'),
+                Tab(icon: Icon(Icons.event), text: 'Events'),
+                Tab(icon: Icon(Icons.photo_library), text: 'Gallery'),
+                Tab(icon: Icon(Icons.people), text: 'Roster'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _AnnouncementsTab(team: team, canManage: canManage),
+              _EventsTab(team: team, canManage: canManage),
+              const _FeatureComingSoonTab(featureName: 'Gallery'),
+              _RosterTab(team: team, canManage: canManage),
+            ],
+          ),
+        );
+      }
     );
   }
 }
@@ -229,8 +262,105 @@ class _RosterTab extends StatelessWidget {
   final bool canManage;
   const _RosterTab({required this.team, required this.canManage});
 
-  void _showAddMemberDialog(BuildContext context) {
-    // ... Dialog logic to add a new member by email
+ void _showAddMemberDialog(BuildContext context) {
+    final firestoreService = context.read<FirestoreService>();
+    final emailController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String selectedRole = 'member';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) { // Use a different context name for the dialog
+        return AlertDialog(
+          title: const Text('Add New Member'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'User Email'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter an email';
+                    }
+                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(value)) {
+                      return 'Please enter a valid email address';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  decoration: const InputDecoration(labelText: 'Role'),
+                  items: ['member', 'coach', 'manager']
+                      .map((role) => DropdownMenuItem(
+                            value: role,
+                            child: Text(role[0].toUpperCase() + role.substring(1)),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      selectedRole = value;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  final email = emailController.text;
+                  
+                  // **FIX**: Store the messenger and navigator before async operations
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(dialogContext);
+
+                  navigator.pop(); // Pop the dialog first
+
+                  final userToAdd = await firestoreService.getUserByEmail(email);
+
+                  if (userToAdd == null) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Error: User with email $email not found.'), backgroundColor: Colors.red),
+                    );
+                    return;
+                  }
+
+                  if (team.members.containsKey(userToAdd.uid)) {
+                     messenger.showSnackBar(
+                      SnackBar(content: Text('${userToAdd.displayName} is already in the team.'), backgroundColor: Colors.orange),
+                    );
+                    return;
+                  }
+
+                  // Add member to the team
+                  try {
+                    await firestoreService.addTeamMember(team.id, userToAdd.uid, selectedRole);
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Successfully added ${userToAdd.displayName} to the team.'), backgroundColor: Colors.green),
+                    );
+                  } catch (e) {
+                     messenger.showSnackBar(
+                      SnackBar(content: Text('Failed to add member: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -239,6 +369,7 @@ class _RosterTab extends StatelessWidget {
     final currentUserId = context.read<UserProvider>().userModel?.uid;
 
     return Scaffold(
+      // **FIX**: The ListView now builds from the live `team` object from the StreamBuilder
       body: ListView(
         children: team.members.entries.map((entry) {
           final userId = entry.key;
@@ -247,7 +378,7 @@ class _RosterTab extends StatelessWidget {
           return StreamBuilder<UserModel>(
             stream: firestoreService.getUserStream(userId),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const ListTile();
+              if (!snapshot.hasData) return const ListTile(title: LinearProgressIndicator());
               final user = snapshot.data!;
               return ListTile(
                 leading: CircleAvatar(backgroundImage: NetworkImage(user.photoURL)),
@@ -260,7 +391,9 @@ class _RosterTab extends StatelessWidget {
                     if (canManage && user.uid != currentUserId && role != 'owner')
                       IconButton(
                         icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                        tooltip: 'Remove ${user.displayName}',
                         onPressed: () async {
+                          // This will now trigger the StreamBuilder to rebuild automatically
                            await firestoreService.removeTeamMember(team.id, user.uid);
                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${user.displayName} removed from team.')));
                         },

@@ -56,13 +56,20 @@ class StudentPanelPage extends StatelessWidget {
                               ),
                             ),
                             onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      TeamDetailPage(team: team),
-                                ),
-                              );
+                              // **FIX**: Ensure user is actually a member before navigating
+                              if (userModel != null && team.members.containsKey(userModel.uid)) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        TeamDetailPage(team: team),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("You are not a member of this team."))
+                                );
+                              }
                             },
                           ),
                         );
@@ -103,4 +110,3 @@ class StudentPanelPage extends StatelessWidget {
     );
   }
 }
-
