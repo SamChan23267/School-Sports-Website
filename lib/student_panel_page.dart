@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/team_model.dart';
 import '../providers/user_provider.dart';
+import 'team_detail_page.dart'; // Import the new detail page
 
 class StudentPanelPage extends StatelessWidget {
   const StudentPanelPage({super.key});
@@ -11,57 +12,95 @@ class StudentPanelPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
-        // Get the list of teams from the provider
-        final List<TeamModel> teams = userProvider.teams ?? [];
+        final userModel = userProvider.userModel;
+        final List<TeamModel> classroomTeams = userProvider.teams ?? [];
+        final List<String> followedTeams = userModel?.followedTeams ?? [];
 
         return Scaffold(
-          // The AppBar is implicitly handled by the main LandingPage scaffold
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Text(
-                  "My Teams",
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  "My Teams & Follows",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
               ),
-              Expanded(
-                child: teams.isEmpty
-                    ? const Center(
-                        child: Text('You are not a member of any teams yet.'),
-                      )
-                    : ListView.builder(
-                        itemCount: teams.length,
-                        itemBuilder: (context, index) {
-                          final team = teams[index];
-                          // Get the user's role for this specific team
-                          final userRole = team.members[userProvider.userModel?.uid] ?? 'member';
-
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 6),
-                            child: ListTile(
-                              leading: const Icon(Icons.shield_outlined, size: 40),
-                              title: Text(team.teamName),
-                              trailing: Chip(
-                                label: Text(
-                                  // Capitalize the first letter of the role
-                                  '${userRole[0].toUpperCase()}${userRole.substring(1)}',
-                                ),
+              if (classroomTeams.isEmpty && followedTeams.isEmpty)
+                const Expanded(
+                  child: Center(
+                    child: Text(
+                        'You are not a member of any teams and are not following any public teams yet.'),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    children: [
+                      if (classroomTeams.isNotEmpty)
+                        _buildSectionHeader("Classroom Teams"),
+                      ...classroomTeams.map((team) {
+                        final userRole =
+                            team.members[userModel?.uid] ?? 'member';
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          child: ListTile(
+                            leading: const Icon(Icons.group, size: 40),
+                            title: Text(team.teamName),
+                            subtitle: Text(team.sport ?? 'General'),
+                            trailing: Chip(
+                              label: Text(
+                                '${userRole[0].toUpperCase()}${userRole.substring(1)}',
                               ),
                             ),
-                          );
-                        },
-                      ),
-              ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      TeamDetailPage(team: team),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }),
+                      if (followedTeams.isNotEmpty)
+                        _buildSectionHeader("Followed Public Teams"),
+                      ...followedTeams.map((uniqueId) {
+                        final parts = uniqueId.split('::');
+                        final sportName = parts[0];
+                        final teamName = parts.length > 1 ? parts[1] : uniqueId;
+                        return Card(
+                           margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          child: ListTile(
+                            leading: const Icon(Icons.star, size: 40, color: Colors.amber),
+                            title: Text(teamName),
+                            subtitle: Text(sportName),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
             ],
           ),
         );
       },
     );
   }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey),
+      ),
+    );
+  }
 }
+
