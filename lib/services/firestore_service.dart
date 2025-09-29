@@ -78,6 +78,14 @@ class FirestoreService {
   }
 
   // --- Classroom Team Methods ---
+  Stream<TeamModel> getTeamStream(String teamId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .snapshots()
+        .map((snapshot) => TeamModel.fromFirestore(snapshot));
+  }
+  
   Stream<List<TeamModel>> getTeamsForUser(String userId) {
     return _db
         .collection('teams')
@@ -87,13 +95,6 @@ class FirestoreService {
       return snapshot.docs.map((doc) => TeamModel.fromFirestore(doc)).toList();
     });
   }
-  
-  Stream<TeamModel> getTeamStream(String teamId) {
-    return _db.collection('teams').doc(teamId).snapshots().map((snapshot) {
-      return TeamModel.fromFirestore(snapshot);
-    });
-  }
-
 
   /// Fetches all teams from the database. This is used for the Admin Panel.
   Future<List<TeamModel>> getAllTeams() async {
@@ -128,18 +129,19 @@ class FirestoreService {
         .update({'members.$userId': role});
   }
 
-  Future<void> updateTeamMemberRole(String teamId, String userId, String newRole) async {
-    await _db
-        .collection('teams')
-        .doc(teamId)
-        .update({'members.$userId': newRole});
-  }
-
   Future<void> removeTeamMember(String teamId, String userId) async {
     await _db
         .collection('teams')
         .doc(teamId)
         .update({'members.$userId': FieldValue.delete()});
+  }
+
+  Future<void> updateTeamMemberRole(
+      String teamId, String userId, String newRole) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .update({'members.$userId': newRole});
   }
 
   // --- Announcements ---
@@ -171,12 +173,38 @@ class FirestoreService {
 
   // --- Events ---
   Future<void> createEvent(String teamId, String title, String? description,
-      DateTime eventDate, UserModel author) async {
+      DateTime startDate, DateTime? endDate, UserModel author) async {
     await _db.collection('teams').doc(teamId).collection('events').add({
       'title': title,
       'description': description,
-      'eventDate': Timestamp.fromDate(eventDate),
-      'createdBy': author.displayName,
+      'eventDate': Timestamp.fromDate(startDate),
+      'eventEndDate': endDate != null ? Timestamp.fromDate(endDate) : null,
+      'createdBy': author.uid,
+      'authorName': author.displayName,
+      'responses': {},
+    });
+  }
+
+  // New: Update an existing event
+  Future<void> updateEvent(String teamId, String eventId, String title,
+      String? description, DateTime startDate, DateTime? endDate) async {
+    await _db.collection('teams').doc(teamId).collection('events').doc(eventId).update({
+      'title': title,
+      'description': description,
+      'eventDate': Timestamp.fromDate(startDate),
+      'eventEndDate': endDate != null ? Timestamp.fromDate(endDate) : null,
+    });
+  }
+
+  // New: Delete an event
+  Future<void> deleteEvent(String teamId, String eventId) async {
+    await _db.collection('teams').doc(teamId).collection('events').doc(eventId).delete();
+  }
+  
+  // New: Record a user's response to an event
+  Future<void> respondToEvent(String teamId, String eventId, String userId, String status) async {
+    await _db.collection('teams').doc(teamId).collection('events').doc(eventId).update({
+      'responses.$userId': status,
     });
   }
 

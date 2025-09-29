@@ -39,84 +39,87 @@ class _TeamDetailPageState extends State<TeamDetailPage>
   Widget build(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
     final userModel = context.watch<UserProvider>().userModel;
-    
+
     if (userModel == null) {
       return const Scaffold(
           body: Center(child: Text("Please log in to view team details.")));
     }
 
     return StreamBuilder<TeamModel>(
-      // Listen to live updates for the team
-      stream: firestoreService.getTeamStream(widget.team.id),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return const Scaffold(body: Center(child: Text("Error loading team data or team not found.")));
-        }
-        
-        final team = snapshot.data!;
+        // Listen to live updates for the team
+        stream: firestoreService.getTeamStream(widget.team.id),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+                body: Center(child: CircularProgressIndicator()));
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return const Scaffold(
+                body: Center(
+                    child: Text("Error loading team data or team not found.")));
+          }
 
-        // Check for membership before showing content
-        if (!team.members.containsKey(userModel.uid)) {
-          return Scaffold(
-            appBar: AppBar(title: const Text("Access Denied")),
-            body: const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  "You are not a member of this team and cannot view its details.",
-                  textAlign: TextAlign.center,
+          final team = snapshot.data!;
+
+          // Check for membership before showing content
+          if (!team.members.containsKey(userModel.uid)) {
+            return Scaffold(
+              appBar: AppBar(title: const Text("Access Denied")),
+              body: const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    "You are not a member of this team and cannot view its details.",
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
+            );
+          }
+
+          final userTeamRole = team.members[userModel.uid] ?? 'member';
+          final canManage =
+              userTeamRole == 'owner' || userTeamRole == 'headCoach';
+
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(team.teamName), // Use live team name
+              actions: [
+                if (canManage)
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    tooltip: 'Team Settings',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TeamSettingsPage(team: team),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.announcement), text: 'Announcements'),
+                  Tab(icon: Icon(Icons.event), text: 'Events'),
+                  Tab(icon: Icon(Icons.photo_library), text: 'Gallery'),
+                  Tab(icon: Icon(Icons.people), text: 'Roster'),
+                ],
+              ),
             ),
-          );
-        }
-
-        final userTeamRole = team.members[userModel.uid] ?? 'member';
-        final canManage = userTeamRole == 'owner' || userTeamRole == 'headCoach';
-
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(team.teamName), // Use live team name
-            actions: [
-              if (canManage)
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  tooltip: 'Team Settings',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => TeamSettingsPage(team: team),
-                      ),
-                    );
-                  },
-                ),
-            ],
-            bottom: TabBar(
+            body: TabBarView(
               controller: _tabController,
-              tabs: const [
-                Tab(icon: Icon(Icons.announcement), text: 'Announcements'),
-                Tab(icon: Icon(Icons.event), text: 'Events'),
-                Tab(icon: Icon(Icons.photo_library), text: 'Gallery'),
-                Tab(icon: Icon(Icons.people), text: 'Roster'),
+              children: [
+                _AnnouncementsTab(team: team, canManage: canManage),
+                _EventsTab(team: team, canManage: canManage),
+                const _FeatureComingSoonTab(featureName: 'Gallery'),
+                _RosterTab(team: team, canManage: canManage),
               ],
             ),
-          ),
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _AnnouncementsTab(team: team, canManage: canManage),
-              _EventsTab(team: team, canManage: canManage),
-              const _FeatureComingSoonTab(featureName: 'Gallery'),
-              _RosterTab(team: team, canManage: canManage),
-            ],
-          ),
-        );
-      }
-    );
+          );
+        });
   }
 }
 
@@ -148,12 +151,15 @@ class _AnnouncementsTab extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               if (formKey.currentState!.validate()) {
-                await context.read<FirestoreService>().postAnnouncement(
-                    team.id, userModel, contentController.text);
+                await context
+                    .read<FirestoreService>()
+                    .postAnnouncement(team.id, userModel, contentController.text);
                 Navigator.of(context).pop();
               }
             },
@@ -168,22 +174,26 @@ class _AnnouncementsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<List<AnnouncementModel>>(
-        stream: context.read<FirestoreService>().getAnnouncementsStream(team.id),
+        stream:
+            context.read<FirestoreService>().getAnnouncementsStream(team.id),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+          if (snapshot.hasError)
+            return Center(child: Text("Error: ${snapshot.error}"));
           final announcements = snapshot.data ?? [];
-          if (announcements.isEmpty) return const Center(child: Text("No announcements yet."));
-          
+          if (announcements.isEmpty)
+            return const Center(child: Text("No announcements yet."));
+
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: announcements.length,
             itemBuilder: (context, index) {
               final announcement = announcements[index];
               return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                margin:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                 child: ListTile(
                   title: Text(announcement.content),
                   subtitle: Text(
@@ -216,37 +226,84 @@ class _EventsTab extends StatelessWidget {
     if (userModel == null) return;
     showDialog(
       context: context,
-      builder: (dialogContext) => _CreateEventDialog(
+      builder: (dialogContext) => _EventDialog(
         team: team,
         author: userModel,
       ),
     );
   }
 
+  String _formatEventTime(EventModel event) {
+    final start = event.eventDate.toDate();
+    if (event.eventEndDate == null) {
+      return DateFormat.yMMMEd().add_jm().format(start);
+    }
+    final end = event.eventEndDate!.toDate();
+    if (start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day) {
+      return '${DateFormat.yMMMEd().format(start)}, ${DateFormat.jm().format(start)} - ${DateFormat.jm().format(end)}';
+    }
+    return '${DateFormat.yMMMEd().add_jm().format(start)} - ${DateFormat.yMMMEd().add_jm().format(end)}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final firestoreService = context.read<FirestoreService>();
     return Scaffold(
       body: StreamBuilder<List<EventModel>>(
-        stream: context.read<FirestoreService>().getEventsStream(team.id),
+        stream: firestoreService.getEventsStream(team.id),
         builder: (context, snapshot) {
-           if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+          if (snapshot.hasError)
+            return Center(child: Text("Error: ${snapshot.error}"));
           final events = snapshot.data ?? [];
-          if (events.isEmpty) return const Center(child: Text("No upcoming events."));
-          
+          if (events.isEmpty)
+            return const Center(child: Text("No upcoming events."));
+
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: events.length,
             itemBuilder: (context, index) {
               final event = events[index];
+              final going = event.responses.values
+                  .where((r) => r == 'going')
+                  .length;
+              final maybe = event.responses.values
+                  .where((r) => r == 'maybe')
+                  .length;
+
               return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                margin:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                 child: ListTile(
-                  title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                      "On ${DateFormat.yMMMEd().add_jm().format(event.eventDate.toDate())}\n${event.description ?? ''}"),
+                  title: Text(event.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_formatEventTime(event)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle,
+                              color: Colors.green, size: 16),
+                          const SizedBox(width: 4),
+                          Text('$going'),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.help,
+                              color: Colors.orange, size: 16),
+                          const SizedBox(width: 4),
+                          Text('$maybe'),
+                        ],
+                      )
+                    ],
+                  ),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => _EventDetailPage(team: team, event: event)));
+                  },
                 ),
               );
             },
@@ -263,53 +320,298 @@ class _EventsTab extends StatelessWidget {
     );
   }
 }
-// **FIX**: Implemented the Create Event Dialog logic
-class _CreateEventDialog extends StatefulWidget {
-  final TeamModel team;
-  final UserModel author;
 
-  const _CreateEventDialog({required this.team, required this.author});
+// --- New Event Detail Page ---
+class _EventDetailPage extends StatelessWidget {
+  final TeamModel team;
+  final EventModel event;
+
+  const _EventDetailPage({required this.team, required this.event});
+
+  String _formatEventTime(EventModel event) {
+    final start = event.eventDate.toDate();
+    if (event.eventEndDate == null) {
+      return DateFormat.yMMMEd().add_jm().format(start);
+    }
+    final end = event.eventEndDate!.toDate();
+    if (start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day) {
+      return '${DateFormat.yMMMEd().format(start)}, ${DateFormat.jm().format(start)} - ${DateFormat.jm().format(end)}';
+    }
+    return '${DateFormat.yMMMEd().add_jm().format(start)} - ${DateFormat.yMMMEd().add_jm().format(end)}';
+  }
+
+   Future<void> _deleteEvent(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Event?'),
+        content: const Text('Are you sure you want to permanently delete this event?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final firestoreService = context.read<FirestoreService>();
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      try {
+        await firestoreService.deleteEvent(team.id, event.id);
+        navigator.pop(); // Go back from the detail page
+        messenger.showSnackBar(const SnackBar(content: Text('Event deleted.')));
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
 
   @override
-  State<_CreateEventDialog> createState() => _CreateEventDialogState();
+  Widget build(BuildContext context) {
+    final userModel = context.read<UserProvider>().userModel!;
+    final firestoreService = context.read<FirestoreService>();
+    final isCreator = userModel.uid == event.createdBy;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(event.title),
+        actions: [
+          if (isCreator)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (dialogContext) => _EventDialog(
+                    team: team,
+                    author: userModel,
+                    eventToEdit: event,
+                  ),
+                );
+              },
+            ),
+          if (isCreator)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _deleteEvent(context),
+            ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(event.title, style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.calendar_today),
+              title: Text(_formatEventTime(event)),
+            ),
+            if (event.description != null && event.description!.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.short_text),
+                title: Text(event.description!),
+              ),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: Text('Created by ${event.authorName}'),
+            ),
+            const Divider(height: 32),
+            Text('Your Availability', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            _AvailabilityButtons(
+              currentResponse: event.responses[userModel.uid],
+              onRespond: (status) {
+                firestoreService.respondToEvent(team.id, event.id, userModel.uid, status);
+              },
+            ),
+            const Divider(height: 32),
+            Text('Responses', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            _ResponseList(responses: event.responses),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _CreateEventDialogState extends State<_CreateEventDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  DateTime _selectedDate = DateTime.now();
+class _AvailabilityButtons extends StatelessWidget {
+  final String? currentResponse;
+  final Function(String) onRespond;
 
-  Future<void> _pickDateTime() async {
+  const _AvailabilityButtons({this.currentResponse, required this.onRespond});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _buildButton(context, 'going', 'Going', Icons.check_circle, Colors.green),
+        _buildButton(context, 'maybe', 'Maybe', Icons.help, Colors.orange),
+        _buildButton(context, 'not_going', 'Not Going', Icons.cancel, Colors.red),
+      ],
+    );
+  }
+
+  Widget _buildButton(BuildContext context, String status, String label, IconData icon, Color color) {
+    final isSelected = currentResponse == status;
+    return ElevatedButton.icon(
+      icon: Icon(icon),
+      label: Text(label),
+      onPressed: () => onRespond(status),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isSelected ? color : null,
+        foregroundColor: isSelected ? Colors.white : null,
+      ),
+    );
+  }
+}
+
+class _ResponseList extends StatelessWidget {
+  final Map<String, String> responses;
+  const _ResponseList({required this.responses});
+
+  @override
+  Widget build(BuildContext context) {
+    if (responses.isEmpty) {
+      return const Text('No one has responded yet.');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildResponseCategory(context, 'going', 'Going', Icons.check_circle, Colors.green),
+        _buildResponseCategory(context, 'maybe', 'Maybe', Icons.help, Colors.orange),
+        _buildResponseCategory(context, 'not_going', 'Not Going', Icons.cancel, Colors.red),
+      ],
+    );
+  }
+
+  Widget _buildResponseCategory(BuildContext context, String status, String title, IconData icon, Color color) {
+    final userIds = responses.entries.where((e) => e.value == status).map((e) => e.key).toList();
+    if (userIds.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text('$title (${userIds.length})', style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 28.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: userIds.map((uid) => _UserResponseTile(uid: uid)).toList(),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class _UserResponseTile extends StatelessWidget {
+  final String uid;
+  const _UserResponseTile({required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<UserModel>(
+      stream: context.read<FirestoreService>().getUserStream(uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Text('Loading...');
+        final user = snapshot.data!;
+        return Text(user.displayName);
+      },
+    );
+  }
+}
+
+// --- Event Create/Edit Dialog ---
+class _EventDialog extends StatefulWidget {
+  final TeamModel team;
+  final UserModel author;
+  final EventModel? eventToEdit;
+
+  const _EventDialog({required this.team, required this.author, this.eventToEdit});
+
+  @override
+  State<_EventDialog> createState() => _EventDialogState();
+}
+
+class _EventDialogState extends State<_EventDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
+  DateTime _startDate = DateTime.now();
+  DateTime? _endDate;
+  bool _isAllDay = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.eventToEdit;
+    if (event != null) {
+      _titleController = TextEditingController(text: event.title);
+      _descriptionController = TextEditingController(text: event.description);
+      _startDate = event.eventDate.toDate();
+      _endDate = event.eventEndDate?.toDate();
+      _isAllDay = _endDate == null;
+    } else {
+       _titleController = TextEditingController();
+       _descriptionController = TextEditingController();
+    }
+  }
+
+  Future<void> _pickDate(bool isStart) async {
+    final initial = isStart ? _startDate : (_endDate ?? _startDate);
     final date = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
     );
     if (date == null) return;
 
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(_selectedDate),
+      initialTime: TimeOfDay.fromDateTime(initial),
     );
     if (time == null) return;
 
     setState(() {
-      _selectedDate = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
+      final newDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      if (isStart) {
+        _startDate = newDateTime;
+        if (_endDate != null && _endDate!.isBefore(_startDate)) {
+          _endDate = _startDate.add(const Duration(hours: 1));
+        }
+      } else {
+        _endDate = newDateTime;
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Create New Event'),
+      title: Text(widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -325,22 +627,37 @@ class _CreateEventDialogState extends State<_CreateEventDialog> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Description (Optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Description (Optional)'),
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              Text('Selected Date & Time', style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(DateFormat.yMMMEd().add_jm().format(_selectedDate)),
-                  IconButton(
-                    icon: const Icon(Icons.edit_calendar),
-                    onPressed: _pickDateTime,
-                  ),
-                ],
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Start: ${DateFormat.yMMMEd().add_jm().format(_startDate)}'),
+                trailing: const Icon(Icons.edit_calendar),
+                onTap: () => _pickDate(true),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('All-day or single time event'),
+                value: _isAllDay,
+                onChanged: (value) => setState(() {
+                  _isAllDay = value;
+                  if (value) {
+                    _endDate = null;
+                  } else {
+                    _endDate = _startDate.add(const Duration(hours: 1));
+                  }
+                }),
+              ),
+              if (!_isAllDay)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('End: ${DateFormat.yMMMEd().add_jm().format(_endDate!)}'),
+                  trailing: const Icon(Icons.edit_calendar),
+                  onTap: () => _pickDate(false),
+                ),
             ],
           ),
         ),
@@ -358,31 +675,44 @@ class _CreateEventDialogState extends State<_CreateEventDialog> {
               final navigator = Navigator.of(context);
 
               try {
-                await firestoreService.createEvent(
-                  widget.team.id,
-                  _titleController.text,
-                  _descriptionController.text,
-                  _selectedDate,
-                  widget.author,
-                );
+                if (widget.eventToEdit == null) {
+                  await firestoreService.createEvent(
+                    widget.team.id,
+                    _titleController.text,
+                    _descriptionController.text,
+                    _startDate,
+                    _isAllDay ? null : _endDate,
+                    widget.author,
+                  );
+                } else {
+                  await firestoreService.updateEvent(
+                    widget.team.id,
+                    widget.eventToEdit!.id,
+                     _titleController.text,
+                    _descriptionController.text,
+                    _startDate,
+                    _isAllDay ? null : _endDate,
+                  );
+                }
+                
                 navigator.pop(); // Close the dialog
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Event created successfully!'),
+                  SnackBar(
+                    content: Text(widget.eventToEdit == null ? 'Event created!' : 'Event updated!'),
                     backgroundColor: Colors.green,
                   ),
                 );
               } catch (e) {
                 messenger.showSnackBar(
                   SnackBar(
-                    content: Text('Failed to create event: $e'),
+                    content: Text('Failed to save event: $e'),
                     backgroundColor: Colors.red,
                   ),
                 );
               }
             }
           },
-          child: const Text('Create'),
+          child: const Text('Save'),
         ),
       ],
     );
@@ -395,7 +725,7 @@ class _RosterTab extends StatelessWidget {
   final bool canManage;
   const _RosterTab({required this.team, required this.canManage});
 
- void _showAddMemberDialog(BuildContext context) {
+  void _showAddMemberDialog(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
     final emailController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -403,7 +733,8 @@ class _RosterTab extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (dialogContext) { // Use a different context name for the dialog
+      builder: (dialogContext) {
+        // Use a different context name for the dialog
         return AlertDialog(
           title: const Text('Add New Member'),
           content: Form(
@@ -431,7 +762,8 @@ class _RosterTab extends StatelessWidget {
                   items: ['member', 'coach', 'manager']
                       .map((role) => DropdownMenuItem(
                             value: role,
-                            child: Text(role[0].toUpperCase() + role.substring(1)),
+                            child:
+                                Text(role[0].toUpperCase() + role.substring(1)),
                           ))
                       .toList(),
                   onChanged: (value) {
@@ -452,36 +784,48 @@ class _RosterTab extends StatelessWidget {
               onPressed: () async {
                 if (formKey.currentState!.validate()) {
                   final email = emailController.text;
-                  
+
                   final messenger = ScaffoldMessenger.of(context);
                   final navigator = Navigator.of(dialogContext);
 
-                  navigator.pop(); 
+                  navigator.pop();
 
                   final userToAdd = await firestoreService.getUserByEmail(email);
 
                   if (userToAdd == null) {
                     messenger.showSnackBar(
-                      SnackBar(content: Text('Error: User with email $email not found.'), backgroundColor: Colors.red),
+                      SnackBar(
+                          content: Text(
+                              'Error: User with email $email not found.'),
+                          backgroundColor: Colors.red),
                     );
                     return;
                   }
 
                   if (team.members.containsKey(userToAdd.uid)) {
-                     messenger.showSnackBar(
-                      SnackBar(content: Text('${userToAdd.displayName} is already in the team.'), backgroundColor: Colors.orange),
+                    messenger.showSnackBar(
+                      SnackBar(
+                          content:
+                              Text('${userToAdd.displayName} is already in the team.'),
+                          backgroundColor: Colors.orange),
                     );
                     return;
                   }
 
                   try {
-                    await firestoreService.addTeamMember(team.id, userToAdd.uid, selectedRole);
+                    await firestoreService.addTeamMember(
+                        team.id, userToAdd.uid, selectedRole);
                     messenger.showSnackBar(
-                      SnackBar(content: Text('Successfully added ${userToAdd.displayName} to the team.'), backgroundColor: Colors.green),
+                      SnackBar(
+                          content: Text(
+                              'Successfully added ${userToAdd.displayName} to the team.'),
+                          backgroundColor: Colors.green),
                     );
                   } catch (e) {
-                     messenger.showSnackBar(
-                      SnackBar(content: Text('Failed to add member: $e'), backgroundColor: Colors.red),
+                    messenger.showSnackBar(
+                      SnackBar(
+                          content: Text('Failed to add member: $e'),
+                          backgroundColor: Colors.red),
                     );
                   }
                 }
@@ -494,7 +838,8 @@ class _RosterTab extends StatelessWidget {
     );
   }
 
-  void _showChangeRoleDialog(BuildContext context, TeamModel team, UserModel member) {
+  void _showChangeRoleDialog(
+      BuildContext context, TeamModel team, UserModel member) {
     final firestoreService = context.read<FirestoreService>();
     String selectedRole = team.members[member.uid] ?? 'member';
     final availableRoles = ['member', 'coach', 'manager'];
@@ -530,13 +875,19 @@ class _RosterTab extends StatelessWidget {
                 final navigator = Navigator.of(dialogContext);
 
                 try {
-                  await firestoreService.updateTeamMemberRole(team.id, member.uid, selectedRole);
+                  await firestoreService.updateTeamMemberRole(
+                      team.id, member.uid, selectedRole);
                   messenger.showSnackBar(
-                    SnackBar(content: Text('${member.displayName}\'s role updated to $selectedRole.'), backgroundColor: Colors.green),
+                    SnackBar(
+                        content: Text(
+                            '${member.displayName}\'s role updated to $selectedRole.'),
+                        backgroundColor: Colors.green),
                   );
                 } catch (e) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Failed to update role: $e'), backgroundColor: Colors.red),
+                    SnackBar(
+                        content: Text('Failed to update role: $e'),
+                        backgroundColor: Colors.red),
                   );
                 }
                 navigator.pop();
@@ -548,7 +899,6 @@ class _RosterTab extends StatelessWidget {
       },
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -564,10 +914,12 @@ class _RosterTab extends StatelessWidget {
           return StreamBuilder<UserModel>(
             stream: firestoreService.getUserStream(userId),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const ListTile(title: LinearProgressIndicator());
+              if (!snapshot.hasData)
+                return const ListTile(title: LinearProgressIndicator());
               final user = snapshot.data!;
               return ListTile(
-                leading: CircleAvatar(backgroundImage: NetworkImage(user.photoURL)),
+                leading:
+                    CircleAvatar(backgroundImage: NetworkImage(user.photoURL)),
                 title: Text(user.displayName),
                 subtitle: Text(user.email),
                 trailing: Row(
@@ -579,16 +931,20 @@ class _RosterTab extends StatelessWidget {
                         icon: const Icon(Icons.edit_note),
                         tooltip: 'Change ${user.displayName}\'s role',
                         onPressed: () {
-                           _showChangeRoleDialog(context, team, user);
+                          _showChangeRoleDialog(context, team, user);
                         },
                       ),
                     if (canManage && user.uid != currentUserId && role != 'owner')
                       IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                        icon: const Icon(Icons.remove_circle_outline,
+                            color: Colors.red),
                         tooltip: 'Remove ${user.displayName}',
                         onPressed: () async {
-                           await firestoreService.removeTeamMember(team.id, user.uid);
-                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${user.displayName} removed from team.')));
+                          await firestoreService.removeTeamMember(
+                              team.id, user.uid);
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content:
+                                  Text('${user.displayName} removed from team.')));
                         },
                       ),
                   ],
@@ -608,7 +964,6 @@ class _RosterTab extends StatelessWidget {
     );
   }
 }
-
 
 // --- Placeholder Tab ---
 class _FeatureComingSoonTab extends StatelessWidget {

@@ -6,14 +6,21 @@ class EventModel {
   final String title;
   final String? description;
   final Timestamp eventDate;
-  final String createdBy;
+  final Timestamp? eventEndDate; // New: For event duration
+  final String createdBy; // UID of the creator
+  final String authorName; // Display name of the creator
+  final Map<String, String>
+      responses; // New: Map of UID to status ('going', 'maybe', 'not_going')
 
   EventModel({
     required this.id,
     required this.title,
     this.description,
     required this.eventDate,
+    this.eventEndDate,
     required this.createdBy,
+    required this.authorName,
+    required this.responses,
   });
 
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
@@ -23,8 +30,10 @@ class EventModel {
       title: data['title'] ?? 'Untitled Event',
       description: data['description'],
       eventDate: data['eventDate'] ?? Timestamp.now(),
-      createdBy: data['createdBy'] ?? 'Unknown',
+      eventEndDate: data['eventEndDate'],
+      createdBy: data['createdBy'] ?? '',
+      authorName: data['authorName'] ?? 'Unknown',
+      responses: Map<String, String>.from(data['responses'] ?? {}),
     );
   }
 }
-
