@@ -13,8 +13,18 @@ class StudentPanelPage extends StatelessWidget {
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
         final userModel = userProvider.userModel;
+        // **FIX**: Ensure userModel is not null before proceeding
+        if (userModel == null) {
+          return const Center(child: Text("Loading user data..."));
+        }
+        
         final List<TeamModel> classroomTeams = userProvider.teams ?? [];
-        final List<String> followedTeams = userModel?.followedTeams ?? [];
+        final List<String> followedTeams = userModel.followedTeams;
+
+        // **FIX**: Add a client-side filter as a safeguard.
+        final List<TeamModel> memberTeams = classroomTeams
+            .where((team) => team.members.containsKey(userModel.uid))
+            .toList();
 
         return Scaffold(
           body: Column(
@@ -27,7 +37,7 @@ class StudentPanelPage extends StatelessWidget {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
               ),
-              if (classroomTeams.isEmpty && followedTeams.isEmpty)
+              if (memberTeams.isEmpty && followedTeams.isEmpty)
                 const Expanded(
                   child: Center(
                     child: Text(
@@ -38,11 +48,11 @@ class StudentPanelPage extends StatelessWidget {
                 Expanded(
                   child: ListView(
                     children: [
-                      if (classroomTeams.isNotEmpty)
+                      if (memberTeams.isNotEmpty)
                         _buildSectionHeader("Classroom Teams"),
-                      ...classroomTeams.map((team) {
+                      ...memberTeams.map((team) {
                         final userRole =
-                            team.members[userModel?.uid] ?? 'member';
+                            team.members[userModel.uid] ?? 'member';
                         return Card(
                           margin: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 6),
@@ -56,20 +66,13 @@ class StudentPanelPage extends StatelessWidget {
                               ),
                             ),
                             onTap: () {
-                              // **FIX**: Ensure user is actually a member before navigating
-                              if (userModel != null && team.members.containsKey(userModel.uid)) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        TeamDetailPage(team: team),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("You are not a member of this team."))
-                                );
-                              }
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      TeamDetailPage(team: team),
+                                ),
+                              );
                             },
                           ),
                         );
@@ -110,3 +113,4 @@ class StudentPanelPage extends StatelessWidget {
     );
   }
 }
+

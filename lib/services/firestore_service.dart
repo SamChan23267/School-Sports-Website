@@ -88,7 +88,6 @@ class FirestoreService {
     });
   }
   
-  // **NEW FUNCTION** to get a stream of a single team's updates
   Stream<TeamModel> getTeamStream(String teamId) {
     return _db.collection('teams').doc(teamId).snapshots().map((snapshot) {
       return TeamModel.fromFirestore(snapshot);
@@ -127,6 +126,13 @@ class FirestoreService {
         .collection('teams')
         .doc(teamId)
         .update({'members.$userId': role});
+  }
+
+  Future<void> updateTeamMemberRole(String teamId, String userId, String newRole) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .update({'members.$userId': newRole});
   }
 
   Future<void> removeTeamMember(String teamId, String userId) async {

@@ -46,7 +46,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     }
 
     return StreamBuilder<TeamModel>(
-      // **FIX**: Listen to live updates for the team
+      // Listen to live updates for the team
       stream: firestoreService.getTeamStream(widget.team.id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -58,7 +58,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
         
         final team = snapshot.data!;
 
-        // **FIX**: Check for membership before showing content
+        // Check for membership before showing content
         if (!team.members.containsKey(userModel.uid)) {
           return Scaffold(
             appBar: AppBar(title: const Text("Access Denied")),
@@ -320,11 +320,10 @@ class _RosterTab extends StatelessWidget {
                 if (formKey.currentState!.validate()) {
                   final email = emailController.text;
                   
-                  // **FIX**: Store the messenger and navigator before async operations
                   final messenger = ScaffoldMessenger.of(context);
                   final navigator = Navigator.of(dialogContext);
 
-                  navigator.pop(); // Pop the dialog first
+                  navigator.pop(); 
 
                   final userToAdd = await firestoreService.getUserByEmail(email);
 
@@ -342,7 +341,6 @@ class _RosterTab extends StatelessWidget {
                     return;
                   }
 
-                  // Add member to the team
                   try {
                     await firestoreService.addTeamMember(team.id, userToAdd.uid, selectedRole);
                     messenger.showSnackBar(
@@ -363,13 +361,68 @@ class _RosterTab extends StatelessWidget {
     );
   }
 
+  void _showChangeRoleDialog(BuildContext context, TeamModel team, UserModel member) {
+    final firestoreService = context.read<FirestoreService>();
+    String selectedRole = team.members[member.uid] ?? 'member';
+    final availableRoles = ['member', 'coach', 'manager'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Change Role for ${member.displayName}'),
+          content: DropdownButtonFormField<String>(
+            value: selectedRole,
+            decoration: const InputDecoration(labelText: 'Role'),
+            items: availableRoles
+                .map((role) => DropdownMenuItem(
+                      value: role,
+                      child: Text(role[0].toUpperCase() + role.substring(1)),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                selectedRole = value;
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final navigator = Navigator.of(dialogContext);
+
+                try {
+                  await firestoreService.updateTeamMemberRole(team.id, member.uid, selectedRole);
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('${member.displayName}\'s role updated to $selectedRole.'), backgroundColor: Colors.green),
+                  );
+                } catch (e) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Failed to update role: $e'), backgroundColor: Colors.red),
+                  );
+                }
+                navigator.pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
     final currentUserId = context.read<UserProvider>().userModel?.uid;
 
     return Scaffold(
-      // **FIX**: The ListView now builds from the live `team` object from the StreamBuilder
       body: ListView(
         children: team.members.entries.map((entry) {
           final userId = entry.key;
@@ -390,10 +443,17 @@ class _RosterTab extends StatelessWidget {
                     Chip(label: Text(role)),
                     if (canManage && user.uid != currentUserId && role != 'owner')
                       IconButton(
+                        icon: const Icon(Icons.edit_note),
+                        tooltip: 'Change ${user.displayName}\'s role',
+                        onPressed: () {
+                           _showChangeRoleDialog(context, team, user);
+                        },
+                      ),
+                    if (canManage && user.uid != currentUserId && role != 'owner')
+                      IconButton(
                         icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
                         tooltip: 'Remove ${user.displayName}',
                         onPressed: () async {
-                          // This will now trigger the StreamBuilder to rebuild automatically
                            await firestoreService.removeTeamMember(team.id, user.uid);
                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${user.displayName} removed from team.')));
                         },
