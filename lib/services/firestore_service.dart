@@ -85,7 +85,7 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => TeamModel.fromFirestore(snapshot));
   }
-  
+
   Stream<List<TeamModel>> getTeamsForUser(String userId) {
     return _db
         .collection('teams')
@@ -96,12 +96,11 @@ class FirestoreService {
     });
   }
 
-  /// Fetches all teams from the database. This is used for the Admin Panel.
   Future<List<TeamModel>> getAllTeams() async {
     final snapshot = await _db.collection('teams').get();
     return snapshot.docs.map((doc) => TeamModel.fromFirestore(doc)).toList();
   }
-  
+
   Future<void> createTeam(String teamName, UserModel owner) async {
     await _db.collection('teams').add({
       'teamName': teamName,
@@ -146,7 +145,7 @@ class FirestoreService {
 
   // --- Announcements ---
   Future<void> postAnnouncement(
-      String teamId, UserModel author, String content) async {
+      String teamId, UserModel author, String title, String content) async {
     await _db
         .collection('teams')
         .doc(teamId)
@@ -154,8 +153,11 @@ class FirestoreService {
         .add({
       'authorId': author.uid,
       'authorName': author.displayName,
+      'title': title,
       'content': content,
       'timestamp': FieldValue.serverTimestamp(),
+      'reactions': {},
+      'replyCount': 0,
     });
   }
 
@@ -169,6 +171,76 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs
             .map((doc) => AnnouncementModel.fromFirestore(doc))
             .toList());
+  }
+
+  // New: Toggle a user's reaction to an announcement
+  Future<void> toggleReaction(String teamId, String announcementId,
+      String userId, String emoji) async {
+    final docRef = _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .doc(announcementId);
+
+    return _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) {
+        throw Exception("Announcement does not exist!");
+      }
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final reactions =
+          Map<String, List<dynamic>>.from(data['reactions'] ?? {});
+
+      // Remove user from any existing reaction
+      reactions.forEach((key, value) {
+        value.remove(userId);
+      });
+
+      // Add user to the new reaction list if they weren't already there
+      if (reactions[emoji]?.contains(userId) != true) {
+        reactions.update(emoji, (value) => value..add(userId),
+            ifAbsent: () => [userId]);
+      }
+
+      transaction.update(docRef, {'reactions': reactions});
+    });
+  }
+
+  // New: Add a reply to an announcement
+  Future<void> addReplyToAnnouncement(String teamId, String announcementId,
+      UserModel author, String content) async {
+    final announcementRef = _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .doc(announcementId);
+    final replyRef = announcementRef.collection('replies');
+
+    await _db.runTransaction((transaction) async {
+      transaction.set(replyRef.doc(), {
+        'authorId': author.uid,
+        'authorName': author.displayName,
+        'content': content,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      transaction.update(announcementRef, {'replyCount': FieldValue.increment(1)});
+    });
+  }
+
+  // New: Get stream of replies for an announcement
+  Stream<List<ReplyModel>> getRepliesStream(
+      String teamId, String announcementId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .doc(announcementId)
+        .collection('replies')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => ReplyModel.fromFirestore(doc)).toList());
   }
 
   // --- Events ---
@@ -187,7 +259,12 @@ class FirestoreService {
 
   Future<void> updateEvent(String teamId, String eventId, String title,
       String? description, DateTime startDate, DateTime? endDate) async {
-    await _db.collection('teams').doc(teamId).collection('events').doc(eventId).update({
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .update({
       'title': title,
       'description': description,
       'eventDate': Timestamp.fromDate(startDate),
@@ -196,11 +273,22 @@ class FirestoreService {
   }
 
   Future<void> deleteEvent(String teamId, String eventId) async {
-    await _db.collection('teams').doc(teamId).collection('events').doc(eventId).delete();
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .delete();
   }
-  
-  Future<void> respondToEvent(String teamId, String eventId, String userId, String status) async {
-    await _db.collection('teams').doc(teamId).collection('events').doc(eventId).update({
+
+  Future<void> respondToEvent(
+      String teamId, String eventId, String userId, String status) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .update({
       'responses.$userId': status,
     });
   }
@@ -216,7 +304,6 @@ class FirestoreService {
             snapshot.docs.map((doc) => EventModel.fromFirestore(doc)).toList());
   }
 
-  // New: Stream for a single event
   Stream<EventModel> getEventStream(String teamId, String eventId) {
     return _db
         .collection('teams')

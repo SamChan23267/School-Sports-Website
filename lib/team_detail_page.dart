@@ -112,7 +112,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
             body: TabBarView(
               controller: _tabController,
               children: [
-                _AnnouncementsTab(team: team, canManage: canManage),
+                _AnnouncementsTab(team: team),
                 _EventsTab(team: team, canManage: canManage),
                 const _FeatureComingSoonTab(featureName: 'Gallery'),
                 _RosterTab(team: team, canManage: canManage),
@@ -126,52 +126,11 @@ class _TeamDetailPageState extends State<TeamDetailPage>
 // --- Announcements Tab ---
 class _AnnouncementsTab extends StatelessWidget {
   final TeamModel team;
-  final bool canManage;
-  const _AnnouncementsTab({required this.team, required this.canManage});
-
-  void _showPostAnnouncementDialog(BuildContext context) {
-    final userModel = context.read<UserProvider>().userModel;
-    if (userModel == null) return;
-
-    final contentController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Announcement'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: contentController,
-            decoration: const InputDecoration(labelText: 'Message'),
-            maxLines: 4,
-            validator: (value) =>
-                value!.isEmpty ? 'Please enter a message' : null,
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                await context
-                    .read<FirestoreService>()
-                    .postAnnouncement(team.id, userModel, contentController.text);
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Post'),
-          )
-        ],
-      ),
-    );
-  }
+  const _AnnouncementsTab({required this.team});
 
   @override
   Widget build(BuildContext context) {
+    final userModel = context.read<UserProvider>().userModel!;
     return Scaffold(
       body: StreamBuilder<List<AnnouncementModel>>(
         stream:
@@ -180,37 +139,343 @@ class _AnnouncementsTab extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
+          }
           final announcements = snapshot.data ?? [];
-          if (announcements.isEmpty)
-            return const Center(child: Text("No announcements yet."));
+          if (announcements.isEmpty) {
+            return const Center(child: Text("No announcements yet. Be the first to post!"));
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: announcements.length,
             itemBuilder: (context, index) {
               final announcement = announcements[index];
-              return Card(
-                margin:
-                    const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                child: ListTile(
-                  title: Text(announcement.content),
-                  subtitle: Text(
-                      "Posted by ${announcement.authorName} on ${DateFormat.yMd().add_jm().format(announcement.timestamp.toDate())}"),
-                ),
+              return _AnnouncementCard(
+                team: team,
+                announcement: announcement,
+                user: userModel,
               );
             },
           );
         },
       ),
-      floatingActionButton: canManage
-          ? FloatingActionButton(
-              onPressed: () => _showPostAnnouncementDialog(context),
-              tooltip: 'Post Announcement',
-              child: const Icon(Icons.add),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => _AnnouncementComposerPage(team: team),
+            ),
+          );
+        },
+        tooltip: 'Post Announcement',
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  final TeamModel team;
+  final AnnouncementModel announcement;
+  final UserModel user;
+
+  const _AnnouncementCard(
+      {required this.team, required this.announcement, required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => _AnnouncementDetailPage(
+                team: team,
+                announcement: announcement,
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(announcement.title,
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                announcement.content,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Posted by ${announcement.authorName} on ${DateFormat.yMd().format(announcement.timestamp.toDate())}",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const Divider(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ReactionsRow(
+                    team: team,
+                    announcement: announcement,
+                    user: user,
+                  ),
+                  Row(
+                    children: [
+                      const Icon(Icons.reply, size: 16),
+                      const SizedBox(width: 4),
+                      Text('${announcement.replyCount}'),
+                    ],
+                  )
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReactionsRow extends StatelessWidget {
+  final TeamModel team;
+  final AnnouncementModel announcement;
+  final UserModel user;
+  final List<String>
+      allowedReactions = const ['👍', '❤️', '🎉', '🤔'];
+
+  const _ReactionsRow(
+      {required this.team, required this.announcement, required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    final firestoreService = context.read<FirestoreService>();
+    return Row(
+      children: allowedReactions.map((emoji) {
+        final reactors = announcement.reactions[emoji] ?? [];
+        final hasReacted = reactors.contains(user.uid);
+        return Padding(
+          padding: const EdgeInsets.only(right: 4.0),
+          child: InkWell(
+            onTap: () {
+              firestoreService.toggleReaction(
+                  team.id, announcement.id, user.uid, emoji);
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: hasReacted
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : Theme.of(context).colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Text(emoji),
+                  if (reactors.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Text('${reactors.length}', style: const TextStyle(fontSize: 12)),
+                  ]
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _AnnouncementComposerPage extends StatefulWidget {
+  final TeamModel team;
+  const _AnnouncementComposerPage({required this.team});
+
+  @override
+  State<_AnnouncementComposerPage> createState() =>
+      _AnnouncementComposerPageState();
+}
+
+class _AnnouncementComposerPageState extends State<_AnnouncementComposerPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _contentController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('New Announcement'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.send),
+            onPressed: () async {
+              if (_formKey.currentState!.validate()) {
+                final userModel = context.read<UserProvider>().userModel!;
+                await context.read<FirestoreService>().postAnnouncement(
+                      widget.team.id,
+                      userModel,
+                      _titleController.text,
+                      _contentController.text,
+                    );
+                Navigator.of(context).pop();
+              }
+            },
+          )
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) =>
+                    value!.isEmpty ? 'Please enter a title' : null,
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _contentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Content',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Please enter content' : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementDetailPage extends StatelessWidget {
+  final TeamModel team;
+  final AnnouncementModel announcement;
+
+  const _AnnouncementDetailPage(
+      {required this.team, required this.announcement});
+
+  @override
+  Widget build(BuildContext context) {
+    final firestoreService = context.read<FirestoreService>();
+    final userModel = context.read<UserProvider>().userModel!;
+    final replyController = TextEditingController();
+
+    return Scaffold(
+      appBar: AppBar(title: Text(announcement.title)),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(announcement.title,
+                      style: Theme.of(context).textTheme.headlineMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    "By ${announcement.authorName} on ${DateFormat.yMMMMEEEEd().format(announcement.timestamp.toDate())}",
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(announcement.content),
+                  const Divider(height: 32),
+                   _ReactionsRow(
+                    team: team,
+                    announcement: announcement,
+                    user: userModel,
+                  ),
+                   const Divider(height: 32),
+                  Text("Replies", style: Theme.of(context).textTheme.titleLarge),
+                  StreamBuilder<List<ReplyModel>>(
+                    stream: firestoreService.getRepliesStream(
+                        team.id, announcement.id),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+                      final replies = snapshot.data ?? [];
+                      if (replies.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 16.0),
+                          child: Text("No replies yet."),
+                        );
+                      }
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: replies.length,
+                        itemBuilder: (context, index) {
+                          final reply = replies[index];
+                          return ListTile(
+                            title: Text(reply.content),
+                            subtitle: Text(
+                                "${reply.authorName} - ${DateFormat.yMd().add_jm().format(reply.timestamp.toDate())}"),
+                          );
+                        },
+                      );
+                    },
+                  )
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: replyController,
+                    decoration:
+                        const InputDecoration(hintText: "Write a reply..."),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: () {
+                    if (replyController.text.isNotEmpty) {
+                      firestoreService.addReplyToAnnouncement(
+                        team.id,
+                        announcement.id,
+                        userModel,
+                        replyController.text,
+                      );
+                      replyController.clear();
+                    }
+                  },
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -268,12 +533,10 @@ class _EventsTab extends StatelessWidget {
             itemCount: events.length,
             itemBuilder: (context, index) {
               final event = events[index];
-              final going = event.responses.values
-                  .where((r) => r == 'going')
-                  .length;
-              final maybe = event.responses.values
-                  .where((r) => r == 'maybe')
-                  .length;
+              final going =
+                  event.responses.values.where((r) => r == 'going').length;
+              final maybe =
+                  event.responses.values.where((r) => r == 'maybe').length;
 
               return Card(
                 margin:
@@ -302,7 +565,11 @@ class _EventsTab extends StatelessWidget {
                     ],
                   ),
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => _EventDetailPage(team: team, eventId: event.id)));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                _EventDetailPage(team: team, eventId: event.id)));
                   },
                 ),
               );
@@ -342,14 +609,17 @@ class _EventDetailPage extends StatelessWidget {
     return '${DateFormat.yMMMEd().add_jm().format(start)} - ${DateFormat.yMMMEd().add_jm().format(end)}';
   }
 
-   Future<void> _deleteEvent(BuildContext context, EventModel event) async {
+  Future<void> _deleteEvent(BuildContext context, EventModel event) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Event?'),
-        content: const Text('Are you sure you want to permanently delete this event?'),
+        content:
+            const Text('Are you sure you want to permanently delete this event?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('DELETE', style: TextStyle(color: Colors.red)),
@@ -367,100 +637,104 @@ class _EventDetailPage extends StatelessWidget {
         navigator.pop(); // Go back from the detail page
         messenger.showSnackBar(const SnackBar(content: Text('Event deleted.')));
       } catch (e) {
-        messenger.showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+        messenger.showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     final userModel = context.read<UserProvider>().userModel!;
     final firestoreService = context.read<FirestoreService>();
-    
+
     return StreamBuilder<EventModel>(
-      stream: firestoreService.getEventStream(team.id, eventId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: Text("Event not found or an error occurred.")),
-          );
-        }
+        stream: firestoreService.getEventStream(team.id, eventId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Scaffold(
+              appBar: AppBar(),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return Scaffold(
+              appBar: AppBar(),
+              body: const Center(
+                  child: Text("Event not found or an error occurred.")),
+            );
+          }
 
-        final event = snapshot.data!;
-        final isCreator = userModel.uid == event.createdBy;
+          final event = snapshot.data!;
+          final isCreator = userModel.uid == event.createdBy;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(event.title),
-            actions: [
-              if (isCreator)
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (dialogContext) => _EventDialog(
-                        team: team,
-                        author: userModel,
-                        eventToEdit: event,
-                      ),
-                    );
-                  },
-                ),
-              if (isCreator)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _deleteEvent(context, event),
-                ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(event.title, style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.calendar_today),
-                  title: Text(_formatEventTime(event)),
-                ),
-                if (event.description != null && event.description!.isNotEmpty)
-                  ListTile(
-                    leading: const Icon(Icons.short_text),
-                    title: Text(event.description!),
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(event.title),
+              actions: [
+                if (isCreator)
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (dialogContext) => _EventDialog(
+                          team: team,
+                          author: userModel,
+                          eventToEdit: event,
+                        ),
+                      );
+                    },
                   ),
-                ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: Text('Created by ${event.authorName}'),
-                ),
-                const Divider(height: 32),
-                Text('Your Availability', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                _AvailabilityButtons(
-                  currentResponse: event.responses[userModel.uid],
-                  onRespond: (status) {
-                    firestoreService.respondToEvent(team.id, event.id, userModel.uid, status);
-                  },
-                ),
-                const Divider(height: 32),
-                Text('Responses', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                _ResponseList(responses: event.responses),
+                if (isCreator)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _deleteEvent(context, event),
+                  ),
               ],
             ),
-          ),
-        );
-      }
-    );
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(event.title,
+                      style: Theme.of(context).textTheme.headlineMedium),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(_formatEventTime(event)),
+                  ),
+                  if (event.description != null && event.description!.isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.short_text),
+                      title: Text(event.description!),
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.person_outline),
+                    title: Text('Created by ${event.authorName}'),
+                  ),
+                  const Divider(height: 32),
+                  Text('Your Availability',
+                      style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  _AvailabilityButtons(
+                    currentResponse: event.responses[userModel.uid],
+                    onRespond: (status) {
+                      firestoreService.respondToEvent(
+                          team.id, event.id, userModel.uid, status);
+                    },
+                  ),
+                  const Divider(height: 32),
+                  Text('Responses',
+                      style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  _ResponseList(responses: event.responses),
+                ],
+              ),
+            ),
+          );
+        });
   }
 }
 
@@ -475,14 +749,17 @@ class _AvailabilityButtons extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _buildButton(context, 'going', 'Going', Icons.check_circle, Colors.green),
+        _buildButton(
+            context, 'going', 'Going', Icons.check_circle, Colors.green),
         _buildButton(context, 'maybe', 'Maybe', Icons.help, Colors.orange),
-        _buildButton(context, 'not_going', 'Not Going', Icons.cancel, Colors.red),
+        _buildButton(
+            context, 'not_going', 'Not Going', Icons.cancel, Colors.red),
       ],
     );
   }
 
-  Widget _buildButton(BuildContext context, String status, String label, IconData icon, Color color) {
+  Widget _buildButton(BuildContext context, String status, String label,
+      IconData icon, Color color) {
     final isSelected = currentResponse == status;
     return ElevatedButton.icon(
       icon: Icon(icon),
@@ -509,15 +786,22 @@ class _ResponseList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildResponseCategory(context, 'going', 'Going', Icons.check_circle, Colors.green),
-        _buildResponseCategory(context, 'maybe', 'Maybe', Icons.help, Colors.orange),
-        _buildResponseCategory(context, 'not_going', 'Not Going', Icons.cancel, Colors.red),
+        _buildResponseCategory(
+            context, 'going', 'Going', Icons.check_circle, Colors.green),
+        _buildResponseCategory(
+            context, 'maybe', 'Maybe', Icons.help, Colors.orange),
+        _buildResponseCategory(
+            context, 'not_going', 'Not Going', Icons.cancel, Colors.red),
       ],
     );
   }
 
-  Widget _buildResponseCategory(BuildContext context, String status, String title, IconData icon, Color color) {
-    final userIds = responses.entries.where((e) => e.value == status).map((e) => e.key).toList();
+  Widget _buildResponseCategory(BuildContext context, String status,
+      String title, IconData icon, Color color) {
+    final userIds = responses.entries
+        .where((e) => e.value == status)
+        .map((e) => e.key)
+        .toList();
     if (userIds.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -529,7 +813,8 @@ class _ResponseList extends StatelessWidget {
             children: [
               Icon(icon, color: color, size: 20),
               const SizedBox(width: 8),
-              Text('$title (${userIds.length})', style: Theme.of(context).textTheme.titleMedium),
+              Text('$title (${userIds.length})',
+                  style: Theme.of(context).textTheme.titleMedium),
             ],
           ),
           const SizedBox(height: 8),
@@ -537,7 +822,8 @@ class _ResponseList extends StatelessWidget {
             padding: const EdgeInsets.only(left: 28.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: userIds.map((uid) => _UserResponseTile(uid: uid)).toList(),
+              children:
+                  userIds.map((uid) => _UserResponseTile(uid: uid)).toList(),
             ),
           )
         ],
@@ -569,7 +855,8 @@ class _EventDialog extends StatefulWidget {
   final UserModel author;
   final EventModel? eventToEdit;
 
-  const _EventDialog({required this.team, required this.author, this.eventToEdit});
+  const _EventDialog(
+      {required this.team, required this.author, this.eventToEdit});
 
   @override
   State<_EventDialog> createState() => _EventDialogState();
@@ -594,8 +881,8 @@ class _EventDialogState extends State<_EventDialog> {
       _endDate = event.eventEndDate?.toDate();
       _isAllDay = _endDate == null;
     } else {
-       _titleController = TextEditingController();
-       _descriptionController = TextEditingController();
+      _titleController = TextEditingController();
+      _descriptionController = TextEditingController();
     }
   }
 
@@ -616,7 +903,8 @@ class _EventDialogState extends State<_EventDialog> {
     if (time == null) return;
 
     setState(() {
-      final newDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      final newDateTime =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
       if (isStart) {
         _startDate = newDateTime;
         if (_endDate != null && _endDate!.isBefore(_startDate)) {
@@ -631,7 +919,8 @@ class _EventDialogState extends State<_EventDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
+      title:
+          Text(widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -654,7 +943,8 @@ class _EventDialogState extends State<_EventDialog> {
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('Start: ${DateFormat.yMMMEd().add_jm().format(_startDate)}'),
+                title: Text(
+                    'Start: ${DateFormat.yMMMEd().add_jm().format(_startDate)}'),
                 trailing: const Icon(Icons.edit_calendar),
                 onTap: () => _pickDate(true),
               ),
@@ -674,7 +964,8 @@ class _EventDialogState extends State<_EventDialog> {
               if (!_isAllDay)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text('End: ${DateFormat.yMMMEd().add_jm().format(_endDate!)}'),
+                  title: Text(
+                      'End: ${DateFormat.yMMMEd().add_jm().format(_endDate!)}'),
                   trailing: const Icon(Icons.edit_calendar),
                   onTap: () => _pickDate(false),
                 ),
@@ -708,17 +999,19 @@ class _EventDialogState extends State<_EventDialog> {
                   await firestoreService.updateEvent(
                     widget.team.id,
                     widget.eventToEdit!.id,
-                     _titleController.text,
+                    _titleController.text,
                     _descriptionController.text,
                     _startDate,
                     _isAllDay ? null : _endDate,
                   );
                 }
-                
+
                 navigator.pop(); // Close the dialog
                 messenger.showSnackBar(
                   SnackBar(
-                    content: Text(widget.eventToEdit == null ? 'Event created!' : 'Event updated!'),
+                    content: Text(widget.eventToEdit == null
+                        ? 'Event created!'
+                        : 'Event updated!'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -782,8 +1075,8 @@ class _RosterTab extends StatelessWidget {
                   items: ['member', 'coach', 'manager']
                       .map((role) => DropdownMenuItem(
                             value: role,
-                            child:
-                                Text(role[0].toUpperCase() + role.substring(1)),
+                            child: Text(
+                                role[0].toUpperCase() + role.substring(1)),
                           ))
                       .toList(),
                   onChanged: (value) {
@@ -810,13 +1103,14 @@ class _RosterTab extends StatelessWidget {
 
                   navigator.pop();
 
-                  final userToAdd = await firestoreService.getUserByEmail(email);
+                  final userToAdd =
+                      await firestoreService.getUserByEmail(email);
 
                   if (userToAdd == null) {
                     messenger.showSnackBar(
                       SnackBar(
-                          content: Text(
-                              'Error: User with email $email not found.'),
+                          content:
+                              Text('Error: User with email $email not found.'),
                           backgroundColor: Colors.red),
                     );
                     return;
@@ -825,8 +1119,8 @@ class _RosterTab extends StatelessWidget {
                   if (team.members.containsKey(userToAdd.uid)) {
                     messenger.showSnackBar(
                       SnackBar(
-                          content:
-                              Text('${userToAdd.displayName} is already in the team.'),
+                          content: Text(
+                              '${userToAdd.displayName} is already in the team.'),
                           backgroundColor: Colors.orange),
                     );
                     return;
@@ -946,7 +1240,9 @@ class _RosterTab extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Chip(label: Text(role)),
-                    if (canManage && user.uid != currentUserId && role != 'owner')
+                    if (canManage &&
+                        user.uid != currentUserId &&
+                        role != 'owner')
                       IconButton(
                         icon: const Icon(Icons.edit_note),
                         tooltip: 'Change ${user.displayName}\'s role',
@@ -954,7 +1250,9 @@ class _RosterTab extends StatelessWidget {
                           _showChangeRoleDialog(context, team, user);
                         },
                       ),
-                    if (canManage && user.uid != currentUserId && role != 'owner')
+                    if (canManage &&
+                        user.uid != currentUserId &&
+                        role != 'owner')
                       IconButton(
                         icon: const Icon(Icons.remove_circle_outline,
                             color: Colors.red),
@@ -963,8 +1261,8 @@ class _RosterTab extends StatelessWidget {
                           await firestoreService.removeTeamMember(
                               team.id, user.uid);
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content:
-                                  Text('${user.displayName} removed from team.')));
+                              content: Text(
+                                  '${user.displayName} removed from team.')));
                         },
                       ),
                   ],
