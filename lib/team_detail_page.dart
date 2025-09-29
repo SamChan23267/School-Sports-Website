@@ -212,7 +212,15 @@ class _EventsTab extends StatelessWidget {
   const _EventsTab({required this.team, required this.canManage});
 
   void _showCreateEventDialog(BuildContext context) {
-    // ... Dialog logic to create an event
+    final userModel = context.read<UserProvider>().userModel;
+    if (userModel == null) return;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _CreateEventDialog(
+        team: team,
+        author: userModel,
+      ),
+    );
   }
 
   @override
@@ -252,6 +260,131 @@ class _EventsTab extends StatelessWidget {
               child: const Icon(Icons.add),
             )
           : null,
+    );
+  }
+}
+// **FIX**: Implemented the Create Event Dialog logic
+class _CreateEventDialog extends StatefulWidget {
+  final TeamModel team;
+  final UserModel author;
+
+  const _CreateEventDialog({required this.team, required this.author});
+
+  @override
+  State<_CreateEventDialog> createState() => _CreateEventDialogState();
+}
+
+class _CreateEventDialogState extends State<_CreateEventDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  DateTime _selectedDate = DateTime.now();
+
+  Future<void> _pickDateTime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_selectedDate),
+    );
+    if (time == null) return;
+
+    setState(() {
+      _selectedDate = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create New Event'),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Event Title'),
+                validator: (value) =>
+                    value!.isEmpty ? 'Please enter a title' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Description (Optional)'),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              Text('Selected Date & Time', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(DateFormat.yMMMEd().add_jm().format(_selectedDate)),
+                  IconButton(
+                    icon: const Icon(Icons.edit_calendar),
+                    onPressed: _pickDateTime,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            if (_formKey.currentState!.validate()) {
+              final firestoreService = context.read<FirestoreService>();
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(context);
+
+              try {
+                await firestoreService.createEvent(
+                  widget.team.id,
+                  _titleController.text,
+                  _descriptionController.text,
+                  _selectedDate,
+                  widget.author,
+                );
+                navigator.pop(); // Close the dialog
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Event created successfully!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to create event: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+          child: const Text('Create'),
+        ),
+      ],
     );
   }
 }

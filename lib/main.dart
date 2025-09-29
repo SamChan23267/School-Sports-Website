@@ -11,7 +11,9 @@ import 'contact_us_page.dart';
 import 'login_page.dart';
 import 'admin_page.dart';
 import 'teacher_panel_page.dart';
-import 'student_panel_page.dart';
+// Import the new pages
+import 'classroom_teams_page.dart';
+import 'followed_teams_page.dart';
 import 'services/api_service.dart';
 import 'models.dart';
 import 'providers/user_provider.dart';
@@ -94,7 +96,7 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-enum AppView { upcomingFixtures, results, selectTeam, myTeams }
+enum AppView { upcomingFixtures, results, selectTeam }
 
 class LandingPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -121,8 +123,6 @@ class _LandingPageState extends State<LandingPage> {
         return 'Results';
       case AppView.selectTeam:
         return 'Select a Team';
-      case AppView.myTeams:
-        return 'My Teams';
     }
   }
 
@@ -267,16 +267,34 @@ class _LandingPageState extends State<LandingPage> {
                     Navigator.pop(context);
                   },
                 ),
-                if (userModel != null)
+                // **FIX**: Updated navigation for logged-in users
+                if (userModel != null) ...[
+                  const Divider(),
                   ListTile(
                     leading: const Icon(Icons.group),
-                    title: const Text('My Teams'),
-                    selected: _currentView == AppView.myTeams,
+                    title: const Text('My Classroom Teams'),
                     onTap: () {
-                      setState(() => _currentView = AppView.myTeams);
-                      Navigator.pop(context);
+                      Navigator.pop(context); // Close the drawer first
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ClassroomTeamsPage()),
+                      );
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.star),
+                    title: const Text('Followed Teams'),
+                    onTap: () {
+                      Navigator.pop(context); // Close the drawer first
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const FollowedTeamsPage()),
+                      );
+                    },
+                  ),
+                ],
                 const Divider(),
                 if (userModel != null &&
                     (userModel.appRole == 'admin' ||
@@ -326,13 +344,6 @@ class _LandingPageState extends State<LandingPage> {
       case AppView.selectTeam:
         content = const SportsListColumn();
         break;
-      case AppView.myTeams:
-        content = Provider.of<UserProvider>(context).userModel != null
-            ? const StudentPanelPage()
-            : const Center(
-                child: Text("Please log in to see your teams."),
-              );
-        break;
     }
     return Center(
       child: ConstrainedBox(
@@ -357,7 +368,11 @@ class _LandingPageState extends State<LandingPage> {
 }
 
 class SportsListColumn extends StatefulWidget {
-  const SportsListColumn({super.key});
+  // **FIX**: Added optional parameters to receive initial team/sport selection
+  final String? initialSport;
+  final String? initialTeam;
+
+  const SportsListColumn({super.key, this.initialSport, this.initialTeam});
 
   @override
   State<SportsListColumn> createState() => _SportsListColumnState();
@@ -372,6 +387,24 @@ class _SportsListColumnState extends State<SportsListColumn> {
   Future<List<StandingsTable>>? _standingsFuture;
   int _selectedTabIndex = 0;
   final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    // **FIX**: Pre-select sport and team if they are passed as arguments
+    if (widget.initialSport != null && widget.initialTeam != null) {
+      // Use a post-frame callback to ensure the widget is built before we set state
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _onSportSelected(widget.initialSport!);
+        // A short delay might be needed for the state to update before selecting the team
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted) {
+            _onTeamSelected(widget.initialTeam!, widget.initialSport!);
+          }
+        });
+      });
+    }
+  }
 
   void _onSportSelected(String sportName) {
     setState(() {
@@ -806,4 +839,3 @@ class _FixtureResultCard extends StatelessWidget {
     );
   }
 }
-
