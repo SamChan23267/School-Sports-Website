@@ -302,7 +302,7 @@ class _EventsTab extends StatelessWidget {
                     ],
                   ),
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => _EventDetailPage(team: team, event: event)));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => _EventDetailPage(team: team, eventId: event.id)));
                   },
                 ),
               );
@@ -324,9 +324,9 @@ class _EventsTab extends StatelessWidget {
 // --- New Event Detail Page ---
 class _EventDetailPage extends StatelessWidget {
   final TeamModel team;
-  final EventModel event;
+  final String eventId;
 
-  const _EventDetailPage({required this.team, required this.event});
+  const _EventDetailPage({required this.team, required this.eventId});
 
   String _formatEventTime(EventModel event) {
     final start = event.eventDate.toDate();
@@ -342,7 +342,7 @@ class _EventDetailPage extends StatelessWidget {
     return '${DateFormat.yMMMEd().add_jm().format(start)} - ${DateFormat.yMMMEd().add_jm().format(end)}';
   }
 
-   Future<void> _deleteEvent(BuildContext context) async {
+   Future<void> _deleteEvent(BuildContext context, EventModel event) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -377,69 +377,89 @@ class _EventDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final userModel = context.read<UserProvider>().userModel!;
     final firestoreService = context.read<FirestoreService>();
-    final isCreator = userModel.uid == event.createdBy;
+    
+    return StreamBuilder<EventModel>(
+      stream: firestoreService.getEventStream(team.id, eventId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: const Center(child: Text("Event not found or an error occurred.")),
+          );
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(event.title),
-        actions: [
-          if (isCreator)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (dialogContext) => _EventDialog(
-                    team: team,
-                    author: userModel,
-                    eventToEdit: event,
+        final event = snapshot.data!;
+        final isCreator = userModel.uid == event.createdBy;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(event.title),
+            actions: [
+              if (isCreator)
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (dialogContext) => _EventDialog(
+                        team: team,
+                        author: userModel,
+                        eventToEdit: event,
+                      ),
+                    );
+                  },
+                ),
+              if (isCreator)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _deleteEvent(context, event),
+                ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(event.title, style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(_formatEventTime(event)),
+                ),
+                if (event.description != null && event.description!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.short_text),
+                    title: Text(event.description!),
                   ),
-                );
-              },
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: Text('Created by ${event.authorName}'),
+                ),
+                const Divider(height: 32),
+                Text('Your Availability', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                _AvailabilityButtons(
+                  currentResponse: event.responses[userModel.uid],
+                  onRespond: (status) {
+                    firestoreService.respondToEvent(team.id, event.id, userModel.uid, status);
+                  },
+                ),
+                const Divider(height: 32),
+                Text('Responses', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                _ResponseList(responses: event.responses),
+              ],
             ),
-          if (isCreator)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _deleteEvent(context),
-            ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(event.title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.calendar_today),
-              title: Text(_formatEventTime(event)),
-            ),
-            if (event.description != null && event.description!.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.short_text),
-                title: Text(event.description!),
-              ),
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: Text('Created by ${event.authorName}'),
-            ),
-            const Divider(height: 32),
-            Text('Your Availability', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            _AvailabilityButtons(
-              currentResponse: event.responses[userModel.uid],
-              onRespond: (status) {
-                firestoreService.respondToEvent(team.id, event.id, userModel.uid, status);
-              },
-            ),
-            const Divider(height: 32),
-            Text('Responses', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            _ResponseList(responses: event.responses),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 }

@@ -185,7 +185,6 @@ class FirestoreService {
     });
   }
 
-  // New: Update an existing event
   Future<void> updateEvent(String teamId, String eventId, String title,
       String? description, DateTime startDate, DateTime? endDate) async {
     await _db.collection('teams').doc(teamId).collection('events').doc(eventId).update({
@@ -196,12 +195,10 @@ class FirestoreService {
     });
   }
 
-  // New: Delete an event
   Future<void> deleteEvent(String teamId, String eventId) async {
     await _db.collection('teams').doc(teamId).collection('events').doc(eventId).delete();
   }
   
-  // New: Record a user's response to an event
   Future<void> respondToEvent(String teamId, String eventId, String userId, String status) async {
     await _db.collection('teams').doc(teamId).collection('events').doc(eventId).update({
       'responses.$userId': status,
@@ -217,6 +214,17 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) =>
             snapshot.docs.map((doc) => EventModel.fromFirestore(doc)).toList());
+  }
+
+  // New: Stream for a single event
+  Stream<EventModel> getEventStream(String teamId, String eventId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .snapshots()
+        .map((snapshot) => EventModel.fromFirestore(snapshot));
   }
 }
 
