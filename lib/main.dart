@@ -11,13 +11,12 @@ import 'contact_us_page.dart';
 import 'login_page.dart';
 import 'admin_page.dart';
 import 'teacher_panel_page.dart';
-// Import the new pages
-import 'classroom_teams_page.dart';
-import 'followed_teams_page.dart';
 import 'services/api_service.dart';
 import 'models.dart';
 import 'providers/user_provider.dart';
 import 'services/firestore_service.dart';
+import 'classroom_teams_page.dart';
+import 'followed_teams_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -96,7 +95,13 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-enum AppView { upcomingFixtures, results, selectTeam }
+enum AppView {
+  upcomingFixtures,
+  results,
+  selectTeam,
+  classroomTeams,
+  followedTeams
+}
 
 class LandingPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -114,6 +119,62 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   AppView _currentView = AppView.upcomingFixtures;
+  Map<String, String>? _selectTeamParams;
+
+  void _showJoinTeamDialog() {
+    final firestoreService = context.read<FirestoreService>();
+    final userModel = context.read<UserProvider>().userModel;
+    final codeController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Join a Team'),
+            content: Form(
+              key: formKey,
+              child: TextFormField(
+                controller: codeController,
+                decoration: const InputDecoration(labelText: 'Enter Join Code'),
+                validator: (value) =>
+                    value!.isEmpty ? 'Please enter a code' : null,
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  if (formKey.currentState!.validate() && userModel != null) {
+                    final navigator = Navigator.of(dialogContext);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final code = codeController.text;
+
+                    try {
+                      final teamName = await firestoreService.joinTeamWithCode(
+                          code: code, userId: userModel.uid);
+                      navigator.pop();
+                      messenger.showSnackBar(SnackBar(
+                        content: Text('Successfully joined $teamName!'),
+                        backgroundColor: Colors.green,
+                      ));
+                    } catch (e) {
+                      messenger.showSnackBar(SnackBar(
+                        content: Text(
+                            'Error: ${e.toString().replaceAll("Exception: ", "")}'),
+                        backgroundColor: Colors.red,
+                      ));
+                    }
+                  }
+                },
+                child: const Text('Join'),
+              ),
+            ],
+          );
+        });
+  }
 
   String get _currentViewTitle {
     switch (_currentView) {
@@ -122,7 +183,11 @@ class _LandingPageState extends State<LandingPage> {
       case AppView.results:
         return 'Results';
       case AppView.selectTeam:
-        return 'Select a Team';
+        return _selectTeamParams?['team'] ?? 'Select a Team';
+      case AppView.classroomTeams:
+        return 'My Classroom Teams';
+      case AppView.followedTeams:
+        return 'Followed Teams';
     }
   }
 
@@ -245,7 +310,10 @@ class _LandingPageState extends State<LandingPage> {
                   title: const Text('Upcoming Fixtures'),
                   selected: _currentView == AppView.upcomingFixtures,
                   onTap: () {
-                    setState(() => _currentView = AppView.upcomingFixtures);
+                    setState(() {
+                      _currentView = AppView.upcomingFixtures;
+                      _selectTeamParams = null;
+                    });
                     Navigator.pop(context);
                   },
                 ),
@@ -254,7 +322,10 @@ class _LandingPageState extends State<LandingPage> {
                   title: const Text('Results'),
                   selected: _currentView == AppView.results,
                   onTap: () {
-                    setState(() => _currentView = AppView.results);
+                    setState(() {
+                      _currentView = AppView.results;
+                      _selectTeamParams = null;
+                    });
                     Navigator.pop(context);
                   },
                 ),
@@ -263,38 +334,40 @@ class _LandingPageState extends State<LandingPage> {
                   title: const Text('Select Team'),
                   selected: _currentView == AppView.selectTeam,
                   onTap: () {
-                    setState(() => _currentView = AppView.selectTeam);
+                    setState(() {
+                      _currentView = AppView.selectTeam;
+                      _selectTeamParams = null;
+                    });
                     Navigator.pop(context);
                   },
                 ),
-                // **FIX**: Updated navigation for logged-in users
-                if (userModel != null) ...[
-                  const Divider(),
+                if (userModel != null) const Divider(),
+                if (userModel != null)
                   ListTile(
                     leading: const Icon(Icons.group),
                     title: const Text('My Classroom Teams'),
+                    selected: _currentView == AppView.classroomTeams,
                     onTap: () {
-                      Navigator.pop(context); // Close the drawer first
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ClassroomTeamsPage()),
-                      );
+                      setState(() {
+                        _currentView = AppView.classroomTeams;
+                        _selectTeamParams = null;
+                      });
+                      Navigator.pop(context);
                     },
                   ),
+                if (userModel != null)
                   ListTile(
                     leading: const Icon(Icons.star),
                     title: const Text('Followed Teams'),
+                    selected: _currentView == AppView.followedTeams,
                     onTap: () {
-                      Navigator.pop(context); // Close the drawer first
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const FollowedTeamsPage()),
-                      );
+                      setState(() {
+                        _currentView = AppView.followedTeams;
+                        _selectTeamParams = null;
+                      });
+                      Navigator.pop(context);
                     },
                   ),
-                ],
                 const Divider(),
                 if (userModel != null &&
                     (userModel.appRole == 'admin' ||
@@ -319,20 +392,33 @@ class _LandingPageState extends State<LandingPage> {
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const AdminPage()),
+                        MaterialPageRoute(
+                            builder: (context) => const AdminPage()),
                       );
                     },
                   ),
               ],
             ),
           ),
-          body: _buildCurrentView(),
+          body: _buildCurrentView(userProvider),
+          floatingActionButton: _buildFloatingActionButton(),
         );
       },
     );
   }
 
-  Widget _buildCurrentView() {
+  Widget? _buildFloatingActionButton() {
+    if (_currentView == AppView.classroomTeams) {
+      return FloatingActionButton(
+        onPressed: _showJoinTeamDialog,
+        tooltip: 'Join a Team',
+        child: const Icon(Icons.group_add),
+      );
+    }
+    return null;
+  }
+
+  Widget _buildCurrentView(UserProvider userProvider) {
     Widget content;
     switch (_currentView) {
       case AppView.upcomingFixtures:
@@ -342,7 +428,31 @@ class _LandingPageState extends State<LandingPage> {
         content = const UpcomingFixtureWidget(isResultsView: true);
         break;
       case AppView.selectTeam:
-        content = const SportsListColumn();
+        content = SportsListColumn(
+          initialSport: _selectTeamParams?['sport'],
+          initialTeam: _selectTeamParams?['team'],
+        );
+        break;
+      case AppView.classroomTeams:
+        content = userProvider.userModel != null
+            ? const ClassroomTeamsPage()
+            : const Center(
+                child: Text("Please log in to see your teams."),
+              );
+        break;
+      case AppView.followedTeams:
+        content = userProvider.userModel != null
+            ? FollowedTeamsPage(
+                onTeamSelected: (sport, team) {
+                  setState(() {
+                    _currentView = AppView.selectTeam;
+                    _selectTeamParams = {'sport': sport, 'team': team};
+                  });
+                },
+              )
+            : const Center(
+                child: Text("Please log in to see your followed teams."),
+              );
         break;
     }
     return Center(
@@ -368,10 +478,8 @@ class _LandingPageState extends State<LandingPage> {
 }
 
 class SportsListColumn extends StatefulWidget {
-  // **FIX**: Added optional parameters to receive initial team/sport selection
   final String? initialSport;
   final String? initialTeam;
-
   const SportsListColumn({super.key, this.initialSport, this.initialTeam});
 
   @override
@@ -391,18 +499,11 @@ class _SportsListColumnState extends State<SportsListColumn> {
   @override
   void initState() {
     super.initState();
-    // **FIX**: Pre-select sport and team if they are passed as arguments
-    if (widget.initialSport != null && widget.initialTeam != null) {
-      // Use a post-frame callback to ensure the widget is built before we set state
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _onSportSelected(widget.initialSport!);
-        // A short delay might be needed for the state to update before selecting the team
-        Future.delayed(const Duration(milliseconds: 50), () {
-          if (mounted) {
-            _onTeamSelected(widget.initialTeam!, widget.initialSport!);
-          }
-        });
-      });
+    if (widget.initialSport != null) {
+      _onSportSelected(widget.initialSport!);
+      if (widget.initialTeam != null) {
+        _onTeamSelected(widget.initialTeam!, widget.initialSport!);
+      }
     }
   }
 
@@ -564,7 +665,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
     final userProvider = context.watch<UserProvider>();
     final userModel = userProvider.userModel;
 
-    // --- THE FIX: Create unique ID and check against it ---
     final uniqueTeamId = '${_selectedSport!}::${_selectedTeam!}';
     final isFollowed = userModel?.followedTeams.contains(uniqueTeamId) ?? false;
 
@@ -576,7 +676,6 @@ class _SportsListColumnState extends State<SportsListColumn> {
             child: ElevatedButton.icon(
               onPressed: () {
                 final firestoreService = context.read<FirestoreService>();
-                // --- THE FIX: Pass all required arguments ---
                 if (isFollowed) {
                   firestoreService.unfollowTeam(
                       userModel.uid, _selectedSport!, _selectedTeam!);
@@ -839,3 +938,4 @@ class _FixtureResultCard extends StatelessWidget {
     );
   }
 }
+

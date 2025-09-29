@@ -1,4 +1,5 @@
 // lib/services/firestore_service.dart
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
@@ -108,6 +109,8 @@ class FirestoreService {
       'members': {
         owner.uid: 'owner',
       },
+      'joinCodeEnabled': false,
+      'joinCode': null,
     });
   }
 
@@ -119,13 +122,60 @@ class FirestoreService {
     await _db.collection('teams').doc(teamId).update({'teamName': newName});
   }
 
+  // --- Join Code Methods ---
+  String _generateJoinCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random();
+    return String.fromCharCodes(Iterable.generate(
+        6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+  }
+
+  Future<void> updateJoinCodeSettings(
+      {required String teamId, required bool enabled}) async {
+    if (enabled) {
+      // Generate a new code every time it's enabled
+      final newCode = _generateJoinCode();
+      await _db
+          .collection('teams')
+          .doc(teamId)
+          .update({'joinCodeEnabled': true, 'joinCode': newCode});
+    } else {
+      // Disable and remove the code
+      await _db
+          .collection('teams')
+          .doc(teamId)
+          .update({'joinCodeEnabled': false, 'joinCode': null});
+    }
+  }
+
+  Future<String> joinTeamWithCode(
+      {required String code, required String userId}) async {
+    final querySnapshot = await _db
+        .collection('teams')
+        .where('joinCode', isEqualTo: code.toUpperCase())
+        .where('joinCodeEnabled', isEqualTo: true)
+        .limit(1)
+        .get();
+
+    if (querySnapshot.docs.isEmpty) {
+      throw Exception('Invalid or expired join code.');
+    }
+
+    final teamDoc = querySnapshot.docs.first;
+    final team = TeamModel.fromFirestore(teamDoc);
+
+    if (team.members.containsKey(userId)) {
+      throw Exception('You are already a member of ${team.teamName}.');
+    }
+
+    await addTeamMember(team.id, userId, 'member');
+    return team.teamName;
+  }
+
   // --- Roster Management ---
   Future<void> addTeamMember(
       String teamId, String userId, String role) async {
-    await _db
-        .collection('teams')
-        .doc(teamId)
-        .update({'members.$userId': role});
+    await _db.collection('teams').doc(teamId).update({'members.$userId': role});
   }
 
   Future<void> removeTeamMember(String teamId, String userId) async {
@@ -173,7 +223,6 @@ class FirestoreService {
             .toList());
   }
 
-  // New: Toggle a user's reaction to an announcement
   Future<void> toggleReaction(String teamId, String announcementId,
       String userId, String emoji) async {
     final docRef = _db
@@ -192,12 +241,10 @@ class FirestoreService {
       final reactions =
           Map<String, List<dynamic>>.from(data['reactions'] ?? {});
 
-      // Remove user from any existing reaction
       reactions.forEach((key, value) {
         value.remove(userId);
       });
 
-      // Add user to the new reaction list if they weren't already there
       if (reactions[emoji]?.contains(userId) != true) {
         reactions.update(emoji, (value) => value..add(userId),
             ifAbsent: () => [userId]);
@@ -207,7 +254,6 @@ class FirestoreService {
     });
   }
 
-  // New: Add a reply to an announcement
   Future<void> addReplyToAnnouncement(String teamId, String announcementId,
       UserModel author, String content) async {
     final announcementRef = _db
@@ -224,11 +270,11 @@ class FirestoreService {
         'content': content,
         'timestamp': FieldValue.serverTimestamp(),
       });
-      transaction.update(announcementRef, {'replyCount': FieldValue.increment(1)});
+      transaction
+          .update(announcementRef, {'replyCount': FieldValue.increment(1)});
     });
   }
 
-  // New: Get stream of replies for an announcement
   Stream<List<ReplyModel>> getRepliesStream(
       String teamId, String announcementId) {
     return _db
