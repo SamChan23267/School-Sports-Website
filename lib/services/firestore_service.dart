@@ -61,6 +61,44 @@ class FirestoreService {
     return null;
   }
 
+  /// Searches for users by display name or email.
+  Future<List<UserModel>> searchUsers(String query) async {
+    if (query.isEmpty) {
+      return [];
+    }
+    final lowerCaseQuery = query.toLowerCase();
+
+    // Query for display name
+    final nameQuery = _db
+        .collection('users')
+        .where('displayName', isGreaterThanOrEqualTo: query)
+        .where('displayName', isLessThanOrEqualTo: '$query\uf8ff')
+        .limit(5);
+
+    // Query for email
+    final emailQuery = _db
+        .collection('users')
+        .where('email', isGreaterThanOrEqualTo: lowerCaseQuery)
+        .where('email', isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff')
+        .limit(5);
+
+    final nameResults = await nameQuery.get();
+    final emailResults = await emailQuery.get();
+
+    // Combine and deduplicate results
+    final Map<String, UserModel> users = {};
+    for (var doc in nameResults.docs) {
+      final user = UserModel.fromFirestore(doc.data());
+      users[user.uid] = user;
+    }
+    for (var doc in emailResults.docs) {
+      final user = UserModel.fromFirestore(doc.data());
+      users[user.uid] = user;
+    }
+
+    return users.values.toList();
+  }
+
   // --- Followed Teams Methods ---
   Future<void> followTeam(
       String userId, String sportName, String teamName) async {

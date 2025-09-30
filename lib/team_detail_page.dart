@@ -1,4 +1,5 @@
 // lib/team_detail_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -130,7 +131,6 @@ class _AnnouncementsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userModel = context.read<UserProvider>().userModel!;
     return Scaffold(
       body: StreamBuilder<List<AnnouncementModel>>(
         stream:
@@ -139,13 +139,11 @@ class _AnnouncementsTab extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
+          if (snapshot.hasError)
             return Center(child: Text("Error: ${snapshot.error}"));
-          }
           final announcements = snapshot.data ?? [];
-          if (announcements.isEmpty) {
-            return const Center(child: Text("No announcements yet. Be the first to post!"));
-          }
+          if (announcements.isEmpty)
+            return const Center(child: Text("No announcements yet."));
 
           return ListView.builder(
             padding: const EdgeInsets.all(8),
@@ -153,23 +151,17 @@ class _AnnouncementsTab extends StatelessWidget {
             itemBuilder: (context, index) {
               final announcement = announcements[index];
               return _AnnouncementCard(
-                team: team,
-                announcement: announcement,
-                user: userModel,
-              );
+                  team: team, announcement: announcement);
             },
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => _AnnouncementComposerPage(team: team),
-            ),
-          );
-        },
+                builder: (context) =>
+                    _AnnouncementComposerPage(team: team))),
         tooltip: 'Post Announcement',
         child: const Icon(Icons.add),
       ),
@@ -180,27 +172,20 @@ class _AnnouncementsTab extends StatelessWidget {
 class _AnnouncementCard extends StatelessWidget {
   final TeamModel team;
   final AnnouncementModel announcement;
-  final UserModel user;
-
-  const _AnnouncementCard(
-      {required this.team, required this.announcement, required this.user});
+  const _AnnouncementCard({required this.team, required this.announcement});
 
   @override
   Widget build(BuildContext context) {
+    final user = context.read<UserProvider>().userModel!;
+
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
+        onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => _AnnouncementDetailPage(
-                team: team,
-                announcement: announcement,
-              ),
-            ),
-          );
-        },
+                builder: (context) =>
+                    _AnnouncementDetailPage(team: team, announcement: announcement))),
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
@@ -208,26 +193,23 @@ class _AnnouncementCard extends StatelessWidget {
             children: [
               Text(announcement.title,
                   style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                "Posted by ${announcement.authorName} on ${DateFormat.yMd().format(announcement.timestamp.toDate())}",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: 8),
               Text(
                 announcement.content,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 8),
-              Text(
-                "Posted by ${announcement.authorName} on ${DateFormat.yMd().format(announcement.timestamp.toDate())}",
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
               const Divider(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _ReactionsRow(
-                    team: team,
-                    announcement: announcement,
-                    user: user,
-                  ),
+                  _ReactionButtons(
+                      team: team, announcement: announcement, user: user),
                   Row(
                     children: [
                       const Icon(Icons.reply, size: 16),
@@ -245,52 +227,152 @@ class _AnnouncementCard extends StatelessWidget {
   }
 }
 
-class _ReactionsRow extends StatelessWidget {
+class _ReactionButtons extends StatelessWidget {
   final TeamModel team;
   final AnnouncementModel announcement;
   final UserModel user;
-  final List<String>
-      allowedReactions = const ['👍', '❤️', '🎉', '🤔'];
-
-  const _ReactionsRow(
+  const _ReactionButtons(
       {required this.team, required this.announcement, required this.user});
 
   @override
   Widget build(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
+    final reactions = ['👍', '❤️', '🎉', '🤔'];
+
     return Row(
-      children: allowedReactions.map((emoji) {
+      children: reactions.map((emoji) {
         final reactors = announcement.reactions[emoji] ?? [];
-        final hasReacted = reactors.contains(user.uid);
+        final isReacted = reactors.contains(user.uid);
+        final count = reactors.length;
+
         return Padding(
           padding: const EdgeInsets.only(right: 4.0),
-          child: InkWell(
-            onTap: () {
+          child: TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              backgroundColor:
+                  isReacted ? Theme.of(context).colorScheme.primaryContainer : null,
+            ),
+            onPressed: () {
               firestoreService.toggleReaction(
                   team.id, announcement.id, user.uid, emoji);
             },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: hasReacted
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : Theme.of(context).colorScheme.surfaceVariant,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Text(emoji),
-                  if (reactors.isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    Text('${reactors.length}', style: const TextStyle(fontSize: 12)),
-                  ]
-                ],
-              ),
+            child: Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 16)),
+                if (count > 0) ...[
+                  const SizedBox(width: 4),
+                  Text('$count'),
+                ]
+              ],
             ),
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _AnnouncementDetailPage extends StatelessWidget {
+  final TeamModel team;
+  final AnnouncementModel announcement;
+
+  const _AnnouncementDetailPage(
+      {required this.team, required this.announcement});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = context.read<UserProvider>().userModel!;
+    final firestoreService = context.read<FirestoreService>();
+    final replyController = TextEditingController();
+
+    return Scaffold(
+      appBar: AppBar(title: Text(announcement.title)),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(announcement.title,
+                    style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 8),
+                Text(
+                  "Posted by ${announcement.authorName} on ${DateFormat.yMd().format(announcement.timestamp.toDate())}",
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const Divider(height: 24),
+                Text(announcement.content,
+                    style: Theme.of(context).textTheme.bodyLarge),
+                const SizedBox(height: 16),
+                _ReactionButtons(
+                    team: team, announcement: announcement, user: user),
+                const Divider(height: 24),
+                Text("Replies", style: Theme.of(context).textTheme.titleLarge),
+                StreamBuilder<List<ReplyModel>>(
+                  stream: firestoreService.getRepliesStream(
+                      team.id, announcement.id),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(
+                          child: CircularProgressIndicator());
+                    }
+                    final replies = snapshot.data ?? [];
+                    if (replies.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16.0),
+                        child: Text("No replies yet."),
+                      );
+                    }
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: replies.length,
+                      itemBuilder: (context, index) {
+                        final reply = replies[index];
+                        return ListTile(
+                          title: Text(reply.authorName),
+                          subtitle: Text(reply.content),
+                          trailing: Text(
+                              DateFormat.yMd().format(reply.timestamp.toDate())),
+                        );
+                      },
+                    );
+                  },
+                )
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: replyController,
+                    decoration: const InputDecoration(
+                      hintText: 'Write a reply...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: () {
+                    if (replyController.text.isNotEmpty) {
+                      firestoreService.addReplyToAnnouncement(
+                          team.id, announcement.id, user, replyController.text);
+                      replyController.clear();
+                    }
+                  },
+                )
+              ],
+            ),
+          )
+        ],
+      ),
     );
   }
 }
@@ -311,6 +393,9 @@ class _AnnouncementComposerPageState extends State<_AnnouncementComposerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.read<UserProvider>().userModel!;
+    final firestoreService = context.read<FirestoreService>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Announcement'),
@@ -319,23 +404,18 @@ class _AnnouncementComposerPageState extends State<_AnnouncementComposerPage> {
             icon: const Icon(Icons.send),
             onPressed: () async {
               if (_formKey.currentState!.validate()) {
-                final userModel = context.read<UserProvider>().userModel!;
-                await context.read<FirestoreService>().postAnnouncement(
-                      widget.team.id,
-                      userModel,
-                      _titleController.text,
-                      _contentController.text,
-                    );
-                Navigator.of(context).pop();
+                await firestoreService.postAnnouncement(widget.team.id, user,
+                    _titleController.text, _contentController.text);
+                if (mounted) Navigator.pop(context);
               }
             },
-          )
+          ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
+      body: Form(
+        key: _formKey,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
               TextFormField(
@@ -366,115 +446,6 @@ class _AnnouncementComposerPageState extends State<_AnnouncementComposerPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AnnouncementDetailPage extends StatelessWidget {
-  final TeamModel team;
-  final AnnouncementModel announcement;
-
-  const _AnnouncementDetailPage(
-      {required this.team, required this.announcement});
-
-  @override
-  Widget build(BuildContext context) {
-    final firestoreService = context.read<FirestoreService>();
-    final userModel = context.read<UserProvider>().userModel!;
-    final replyController = TextEditingController();
-
-    return Scaffold(
-      appBar: AppBar(title: Text(announcement.title)),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(announcement.title,
-                      style: Theme.of(context).textTheme.headlineMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    "By ${announcement.authorName} on ${DateFormat.yMMMMEEEEd().format(announcement.timestamp.toDate())}",
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(announcement.content),
-                  const Divider(height: 32),
-                   _ReactionsRow(
-                    team: team,
-                    announcement: announcement,
-                    user: userModel,
-                  ),
-                   const Divider(height: 32),
-                  Text("Replies", style: Theme.of(context).textTheme.titleLarge),
-                  StreamBuilder<List<ReplyModel>>(
-                    stream: firestoreService.getRepliesStream(
-                        team.id, announcement.id),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState ==
-                          ConnectionState.waiting) {
-                        return const Center(
-                            child: CircularProgressIndicator());
-                      }
-                      final replies = snapshot.data ?? [];
-                      if (replies.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.only(top: 16.0),
-                          child: Text("No replies yet."),
-                        );
-                      }
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: replies.length,
-                        itemBuilder: (context, index) {
-                          final reply = replies[index];
-                          return ListTile(
-                            title: Text(reply.content),
-                            subtitle: Text(
-                                "${reply.authorName} - ${DateFormat.yMd().add_jm().format(reply.timestamp.toDate())}"),
-                          );
-                        },
-                      );
-                    },
-                  )
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: replyController,
-                    decoration:
-                        const InputDecoration(hintText: "Write a reply..."),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: () {
-                    if (replyController.text.isNotEmpty) {
-                      firestoreService.addReplyToAnnouncement(
-                        team.id,
-                        announcement.id,
-                        userModel,
-                        replyController.text,
-                      );
-                      replyController.clear();
-                    }
-                  },
-                )
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -568,8 +539,8 @@ class _EventsTab extends StatelessWidget {
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) =>
-                                _EventDetailPage(team: team, eventId: event.id)));
+                            builder: (context) => _EventDetailPage(
+                                team: team, eventId: event.id)));
                   },
                 ),
               );
@@ -635,7 +606,8 @@ class _EventDetailPage extends StatelessWidget {
       try {
         await firestoreService.deleteEvent(team.id, event.id);
         navigator.pop(); // Go back from the detail page
-        messenger.showSnackBar(const SnackBar(content: Text('Event deleted.')));
+        messenger
+            .showSnackBar(const SnackBar(content: Text('Event deleted.')));
       } catch (e) {
         messenger.showSnackBar(
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
@@ -919,8 +891,8 @@ class _EventDialogState extends State<_EventDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title:
-          Text(widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
+      title: Text(
+          widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -1039,116 +1011,10 @@ class _RosterTab extends StatelessWidget {
   const _RosterTab({required this.team, required this.canManage});
 
   void _showAddMemberDialog(BuildContext context) {
-    final firestoreService = context.read<FirestoreService>();
-    final emailController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    String selectedRole = 'member';
-
     showDialog(
       context: context,
-      builder: (dialogContext) {
-        // Use a different context name for the dialog
-        return AlertDialog(
-          title: const Text('Add New Member'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: emailController,
-                  decoration: const InputDecoration(labelText: 'User Email'),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an email';
-                    }
-                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(value)) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedRole,
-                  decoration: const InputDecoration(labelText: 'Role'),
-                  items: ['member', 'coach', 'manager']
-                      .map((role) => DropdownMenuItem(
-                            value: role,
-                            child: Text(
-                                role[0].toUpperCase() + role.substring(1)),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      selectedRole = value;
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final email = emailController.text;
-
-                  final messenger = ScaffoldMessenger.of(context);
-                  final navigator = Navigator.of(dialogContext);
-
-                  navigator.pop();
-
-                  final userToAdd =
-                      await firestoreService.getUserByEmail(email);
-
-                  if (userToAdd == null) {
-                    messenger.showSnackBar(
-                      SnackBar(
-                          content:
-                              Text('Error: User with email $email not found.'),
-                          backgroundColor: Colors.red),
-                    );
-                    return;
-                  }
-
-                  if (team.members.containsKey(userToAdd.uid)) {
-                    messenger.showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              '${userToAdd.displayName} is already in the team.'),
-                          backgroundColor: Colors.orange),
-                    );
-                    return;
-                  }
-
-                  try {
-                    await firestoreService.addTeamMember(
-                        team.id, userToAdd.uid, selectedRole);
-                    messenger.showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'Successfully added ${userToAdd.displayName} to the team.'),
-                          backgroundColor: Colors.green),
-                    );
-                  } catch (e) {
-                    messenger.showSnackBar(
-                      SnackBar(
-                          content: Text('Failed to add member: $e'),
-                          backgroundColor: Colors.red),
-                    );
-                  }
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
+      // Use a builder to get a new context for the dialog
+      builder: (dialogContext) => _AddMemberDialog(team: team),
     );
   }
 
@@ -1279,6 +1145,192 @@ class _RosterTab extends StatelessWidget {
               child: const Icon(Icons.person_add),
             )
           : null,
+    );
+  }
+}
+
+// --- New Add Member Dialog with Search ---
+class _AddMemberDialog extends StatefulWidget {
+  final TeamModel team;
+  const _AddMemberDialog({required this.team});
+
+  @override
+  _AddMemberDialogState createState() => _AddMemberDialogState();
+}
+
+class _AddMemberDialogState extends State<_AddMemberDialog> {
+  final _searchController = TextEditingController();
+  List<UserModel> _searchResults = [];
+  UserModel? _selectedUser;
+  String _selectedRole = 'member';
+  Timer? _debounce;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (_searchController.text.isNotEmpty) {
+        _performSearch();
+      } else {
+        setState(() {
+          _searchResults = [];
+        });
+      }
+    });
+  }
+
+  Future<void> _performSearch() async {
+    setState(() => _isLoading = true);
+    final firestoreService = context.read<FirestoreService>();
+    final results = await firestoreService.searchUsers(_searchController.text);
+    if (mounted) {
+      setState(() {
+        _searchResults = results;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _addSelectedMember() async {
+    if (_selectedUser == null) return;
+
+    final firestoreService = context.read<FirestoreService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    if (widget.team.members.containsKey(_selectedUser!.uid)) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('${_selectedUser!.displayName} is already in the team.'),
+        backgroundColor: Colors.orange,
+      ));
+      return;
+    }
+
+    try {
+      await firestoreService.addTeamMember(
+          widget.team.id, _selectedUser!.uid, _selectedRole);
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content:
+            Text('Successfully added ${_selectedUser!.displayName} to the team.'),
+        backgroundColor: Colors.green,
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Failed to add member: $e'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add New Member'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_selectedUser == null)
+              TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Search by name or email',
+                  suffixIcon: Icon(Icons.search),
+                ),
+              ),
+            if (_selectedUser != null)
+              ListTile(
+                leading: CircleAvatar(
+                    backgroundImage: NetworkImage(_selectedUser!.photoURL)),
+                title: Text(_selectedUser!.displayName),
+                subtitle: Text(_selectedUser!.email),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    setState(() {
+                      _selectedUser = null;
+                      _searchController.clear();
+                    });
+                  },
+                ),
+              ),
+            if (_selectedUser == null)
+              SizedBox(
+                height: 200,
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _searchResults.isEmpty && _searchController.text.isNotEmpty
+                        ? const Center(child: Text('No users found.'))
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _searchResults.length,
+                            itemBuilder: (context, index) {
+                              final user = _searchResults[index];
+                              return ListTile(
+                                leading: CircleAvatar(
+                                    backgroundImage: NetworkImage(user.photoURL)),
+                                title: Text(user.displayName),
+                                subtitle: Text(user.email),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedUser = user;
+                                    _searchResults = [];
+                                  });
+                                },
+                              );
+                            },
+                          ),
+              ),
+            if (_selectedUser != null) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedRole,
+                decoration: const InputDecoration(labelText: 'Role'),
+                items: ['member', 'coach', 'manager']
+                    .map((role) => DropdownMenuItem(
+                          value: role,
+                          child: Text(role[0].toUpperCase() + role.substring(1)),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedRole = value;
+                    });
+                  }
+                },
+              ),
+            ]
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _selectedUser != null ? _addSelectedMember : null,
+          child: const Text('Add Member'),
+        ),
+      ],
     );
   }
 }
