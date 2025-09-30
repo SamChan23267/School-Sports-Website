@@ -1170,6 +1170,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _performSearch(); // Perform initial search for all users
   }
 
   @override
@@ -1182,20 +1183,15 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
 
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      if (_searchController.text.isNotEmpty) {
-        _performSearch();
-      } else {
-        setState(() {
-          _searchResults = [];
-        });
-      }
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _performSearch();
     });
   }
 
   Future<void> _performSearch() async {
     setState(() => _isLoading = true);
     final firestoreService = context.read<FirestoreService>();
+    // The searchUsers function now handles both empty and non-empty queries
     final results = await firestoreService.searchUsers(_searchController.text);
     if (mounted) {
       setState(() {
@@ -1257,6 +1253,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
               ),
             if (_selectedUser != null)
               ListTile(
+                contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                     backgroundImage: NetworkImage(_selectedUser!.photoURL)),
                 title: Text(_selectedUser!.displayName),
@@ -1267,6 +1264,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                     setState(() {
                       _selectedUser = null;
                       _searchController.clear();
+                      _performSearch(); // Re-fetch all users
                     });
                   },
                 ),
@@ -1276,7 +1274,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                 height: 200,
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : _searchResults.isEmpty && _searchController.text.isNotEmpty
+                    : _searchResults.isEmpty
                         ? const Center(child: Text('No users found.'))
                         : ListView.builder(
                             shrinkWrap: true,

@@ -14,15 +14,28 @@ class FirestoreService {
   Future<void> createUserProfile(User user) async {
     final userRef = _db.collection('users').doc(user.uid);
     final snapshot = await userRef.get();
+    final displayName = user.displayName ?? 'No Name';
+
     if (!snapshot.exists) {
+      // New user, create the profile with the lowercase field
       await userRef.set({
         'uid': user.uid,
-        'displayName': user.displayName ?? 'No Name',
+        'displayName': displayName,
+        'displayName_lowercase': displayName.toLowerCase(),
         'email': user.email ?? 'No Email',
         'photoURL': user.photoURL ?? '',
         'appRole': 'student',
         'followedTeams': [],
       });
+    } else {
+      // Existing user, check if the lowercase field is missing and add it.
+      // This makes existing users searchable by name after they log in again.
+      final data = snapshot.data();
+      if (data != null && data['displayName_lowercase'] == null) {
+        await userRef.update({
+          'displayName_lowercase': displayName.toLowerCase(),
+        });
+      }
     }
   }
 
@@ -34,8 +47,10 @@ class FirestoreService {
         .map((snapshot) => UserModel.fromFirestore(snapshot.data() ?? {}));
   }
 
+  /// Fetches an initial list of users to display.
   Future<List<UserModel>> getAllUsers() async {
-    final snapshot = await _db.collection('users').get();
+    // We limit the initial fetch to avoid loading the entire user base at once.
+    final snapshot = await _db.collection('users').limit(20).get();
     return snapshot.docs
         .map((doc) => UserModel.fromFirestore(doc.data()))
         .toList();
@@ -61,31 +76,36 @@ class FirestoreService {
     return null;
   }
 
-  /// Searches for users by display name or email.
+  /// Searches for users by display name or email. Now case-insensitive.
+  /// If the query is empty, it returns an initial list of all users.
   Future<List<UserModel>> searchUsers(String query) async {
+    // If the search box is empty, show an initial list of users.
     if (query.isEmpty) {
-      return [];
+      return getAllUsers();
     }
     final lowerCaseQuery = query.toLowerCase();
 
-    // Query for display name
+    // This type of query finds documents where the field value starts with the search query.
+    // It's the most efficient way to build "search-as-you-type" with Firestore.
     final nameQuery = _db
         .collection('users')
-        .where('displayName', isGreaterThanOrEqualTo: query)
-        .where('displayName', isLessThanOrEqualTo: '$query\uf8ff')
+        .where('displayName_lowercase', isGreaterThanOrEqualTo: lowerCaseQuery)
+        .where('displayName_lowercase',
+            isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff')
         .limit(5);
 
-    // Query for email
     final emailQuery = _db
         .collection('users')
         .where('email', isGreaterThanOrEqualTo: lowerCaseQuery)
         .where('email', isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff')
         .limit(5);
 
-    final nameResults = await nameQuery.get();
-    final emailResults = await emailQuery.get();
+    // Run both queries in parallel.
+    final results = await Future.wait([nameQuery.get(), emailQuery.get()]);
+    final nameResults = results[0];
+    final emailResults = results[1];
 
-    // Combine and deduplicate results
+    // Use a Map to combine and automatically de-duplicate the results.
     final Map<String, UserModel> users = {};
     for (var doc in nameResults.docs) {
       final user = UserModel.fromFirestore(doc.data());
