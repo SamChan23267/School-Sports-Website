@@ -1044,13 +1044,10 @@ class _RosterTab extends StatelessWidget {
 
   void _showChangeRoleDialog(
       BuildContext context, TeamModel team, UserModel member) {
-    final firestoreService = context.read<FirestoreService>();
-    final currentUserId = context.read<UserProvider>().userModel!.uid;
-
     String selectedRole = team.members[member.uid] ?? 'member';
-    final availableRoles = isOwner
-        ? ['member', 'coach', 'manager', 'owner']
-        : ['member', 'coach', 'manager'];
+    // Owner can change to any role, manager can only change to non-manager/owner roles
+    final availableRoles =
+        isOwner ? ['member', 'coach', 'manager'] : ['member', 'coach'];
 
     showDialog(
       context: context,
@@ -1063,8 +1060,6 @@ class _RosterTab extends StatelessWidget {
             items: availableRoles
                 .map((role) => DropdownMenuItem(
                       value: role,
-                      // Disable owner option if target user is the current owner
-                      enabled: !(role == 'owner' && member.uid == currentUserId),
                       child: Text(role[0].toUpperCase() + role.substring(1)),
                     ))
                 .toList(),
@@ -1081,30 +1076,18 @@ class _RosterTab extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
+                final firestoreService = context.read<FirestoreService>();
                 final messenger = ScaffoldMessenger.of(context);
                 final navigator = Navigator.of(dialogContext);
                 try {
-                  if (selectedRole == 'owner') {
-                    // Handle ownership transfer
-                    await firestoreService.transferOwnership(
-                        team.id, member.uid, currentUserId);
-                     messenger.showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'Ownership transferred to ${member.displayName}.'),
-                          backgroundColor: Colors.green),
-                    );
-                  } else {
-                    // Handle normal role update
-                    await firestoreService.updateTeamMemberRole(
-                        team.id, member.uid, selectedRole);
-                    messenger.showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              '${member.displayName}\'s role updated to $selectedRole.'),
-                          backgroundColor: Colors.green),
-                    );
-                  }
+                  await firestoreService.updateTeamMemberRole(
+                      team.id, member.uid, selectedRole);
+                  messenger.showSnackBar(
+                    SnackBar(
+                        content: Text(
+                            '${member.displayName}\'s role updated to $selectedRole.'),
+                        backgroundColor: Colors.green),
+                  );
                 } catch (e) {
                   messenger.showSnackBar(
                     SnackBar(
@@ -1120,6 +1103,14 @@ class _RosterTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _showTransferOwnershipDialog(
+      BuildContext context, UserModel newOwner) {
+    showDialog(
+        context: context,
+        builder: (dialogContext) =>
+            _TransferOwnershipDialog(team: team, newOwner: newOwner));
   }
 
   @override
@@ -1142,16 +1133,17 @@ class _RosterTab extends StatelessWidget {
               final user = snapshot.data!;
               final memberRole = team.members[user.uid] ?? 'member';
 
-              // Determine if the current user can manage this specific member
               bool canManageThisMember = false;
-              if(canManage) {
-                if (isOwner && user.uid != currentUserId) {
-                  canManageThisMember = true;
-                } else if (!isOwner && memberRole != 'owner' && memberRole != 'manager') {
-                  // A manager can't manage another manager or the owner
+              if (canManage && user.uid != currentUserId) {
+                if (isOwner) {
+                  canManageThisMember = true; // Owner can manage anyone
+                } else if (memberRole != 'owner' && memberRole != 'manager') {
+                  // Manager can't manage other managers or the owner
                   canManageThisMember = true;
                 }
               }
+              
+              bool showTransferButton = isOwner && user.uid != currentUserId;
 
               return ListTile(
                 leading:
@@ -1161,6 +1153,11 @@ class _RosterTab extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if(showTransferButton)
+                      TextButton(
+                        onPressed: () => _showTransferOwnershipDialog(context, user),
+                        child: const Text('Make Owner'),
+                      ),
                     Chip(label: Text(role)),
                     if (canManageThisMember)
                       IconButton(
@@ -1387,6 +1384,101 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
   }
 }
 
+// --- New Transfer Ownership Dialog ---
+class _TransferOwnershipDialog extends StatefulWidget {
+  final TeamModel team;
+  final UserModel newOwner;
+  const _TransferOwnershipDialog(
+      {required this.team, required this.newOwner});
+
+  @override
+  State<_TransferOwnershipDialog> createState() =>
+      _TransferOwnershipDialogState();
+}
+
+class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
+  final _confirmController = TextEditingController();
+  bool _isButtonEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _confirmController.addListener(() {
+      setState(() {
+        _isButtonEnabled = _confirmController.text == widget.team.teamName;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  void _confirmTransfer() async {
+    final firestoreService = context.read<FirestoreService>();
+    final currentUserId = context.read<UserProvider>().userModel!.uid;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    try {
+      await firestoreService.transferOwnership(
+          widget.team.id, widget.newOwner.uid, currentUserId);
+      navigator.pop(); // Close the dialog
+      messenger.showSnackBar(SnackBar(
+          content:
+              Text('Ownership successfully transferred to ${widget.newOwner.displayName}'),
+          backgroundColor: Colors.green));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text('Failed to transfer ownership: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Transfer Team Ownership?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+              'You are about to make ${widget.newOwner.displayName} the new owner of ${widget.team.teamName}.'),
+          const SizedBox(height: 8),
+          const Text(
+              'You will be demoted to a manager and will lose the ability to delete the team or transfer ownership again.'),
+          const SizedBox(height: 16),
+          Text(
+              'To confirm, please type the team name below: "${widget.team.teamName}"'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _confirmController,
+            decoration:
+                const InputDecoration(labelText: 'Confirm Team Name'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isButtonEnabled ? _confirmTransfer : null,
+          style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red, foregroundColor: Colors.white),
+          child: const Text('Confirm Transfer'),
+        ),
+      ],
+    );
+  }
+}
+
 // --- Placeholder Tab ---
 class _FeatureComingSoonTab extends StatelessWidget {
   final String featureName;
@@ -1409,3 +1501,4 @@ class _FeatureComingSoonTab extends StatelessWidget {
     );
   }
 }
+
