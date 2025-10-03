@@ -70,9 +70,11 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
             ),
           );
         } finally {
-          setState(() {
-            _isSaving = false;
-          });
+          if (mounted) {
+            setState(() {
+              _isSaving = false;
+            });
+          }
         }
       }
     }
@@ -175,6 +177,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
         children: [
           // Profile Section
           Card(
+            clipBehavior: Clip.antiAlias,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Form(
@@ -197,7 +200,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nameController,
-                      enabled: _isEditingName,
+                      readOnly: !_isEditingName, // FIX: Use readOnly instead of enabled
                       decoration: InputDecoration(
                         labelText: 'Display Name',
                         suffixIcon: IconButton(
@@ -247,6 +250,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
 
           // App Settings Section
           Card(
+            clipBehavior: Clip.antiAlias,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -272,6 +276,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
 
           // Danger Zone
           Card(
+            clipBehavior: Clip.antiAlias,
             color: Theme.of(context).colorScheme.errorContainer,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -285,6 +290,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                   ),
                   const SizedBox(height: 16),
                   ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
                     leading: Icon(Icons.delete_forever,
                         color: Theme.of(context).colorScheme.error),
                     title: const Text('Delete Account'),
@@ -301,3 +307,4 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
     );
   }
 }
+
