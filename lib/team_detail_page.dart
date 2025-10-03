@@ -27,7 +27,8 @@ class _TeamDetailPageState extends State<TeamDetailPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    // The number of tabs is now 3
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -115,7 +116,6 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                 tabs: const [
                   Tab(icon: Icon(Icons.announcement), text: 'Announcements'),
                   Tab(icon: Icon(Icons.event), text: 'Events'),
-                  Tab(icon: Icon(Icons.photo_library), text: 'Gallery'),
                   Tab(icon: Icon(Icons.people), text: 'Roster'),
                 ],
               ),
@@ -125,7 +125,6 @@ class _TeamDetailPageState extends State<TeamDetailPage>
               children: [
                 _AnnouncementsTab(team: team),
                 _EventsTab(team: team, canManage: canManageEvents),
-                const _FeatureComingSoonTab(featureName: 'Gallery'),
                 _RosterTab(
                     team: team, canManage: canManageRoster, isOwner: isOwner),
               ],
@@ -1475,29 +1474,6 @@ class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
           child: const Text('Confirm Transfer'),
         ),
       ],
-    );
-  }
-}
-
-// --- Placeholder Tab ---
-class _FeatureComingSoonTab extends StatelessWidget {
-  final String featureName;
-  const _FeatureComingSoonTab({required this.featureName});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.construction, size: 60, color: Colors.grey),
-          const SizedBox(height: 16),
-          Text(
-            '$featureName Feature Coming Soon!',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-        ],
-      ),
     );
   }
 }
