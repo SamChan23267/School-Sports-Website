@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/team_model.dart';
 import '../providers/user_provider.dart';
 import '../services/firestore_service.dart';
+import 'team_detail_page.dart'; // Import the detail page
 
 class TeacherPanelPage extends StatefulWidget {
   const TeacherPanelPage({super.key});
@@ -96,6 +97,14 @@ class _TeacherPanelPageState extends State<TeacherPanelPage> {
                         subtitle: Text(team.sport ?? 'General'),
                         trailing:
                             Text('${team.members.length} members'),
+                        onTap: () { // Make the list tile tappable
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TeamDetailPage(team: team),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
@@ -110,4 +119,3 @@ class _TeacherPanelPageState extends State<TeacherPanelPage> {
     );
   }
 }
-

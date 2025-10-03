@@ -5,6 +5,7 @@ import '../models/team_model.dart';
 import '../models/user_model.dart';
 import '../providers/user_provider.dart';
 import '../services/firestore_service.dart';
+import 'team_detail_page.dart'; // Import the detail page
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
@@ -365,6 +366,17 @@ class __TeamsManagementTabState extends State<_TeamsManagementTab> {
                       ),
                     ],
                   ),
+                  onTap: () { // Make the list tile tappable
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TeamDetailPage(
+                          team: team,
+                          isAdminOverride: true, // Grant admin access
+                        ),
+                      ),
+                    );
+                  },
                 ),
               );
             },
@@ -379,4 +391,3 @@ class __TeamsManagementTabState extends State<_TeamsManagementTab> {
     );
   }
 }
-

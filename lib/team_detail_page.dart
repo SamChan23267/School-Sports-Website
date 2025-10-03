@@ -13,8 +13,13 @@ import 'team_settings_page.dart';
 
 class TeamDetailPage extends StatefulWidget {
   final TeamModel team;
+  final bool isAdminOverride;
 
-  const TeamDetailPage({super.key, required this.team});
+  const TeamDetailPage({
+    super.key, 
+    required this.team, 
+    this.isAdminOverride = false // Default to false
+  });
 
   @override
   State<TeamDetailPage> createState() => _TeamDetailPageState();
@@ -27,7 +32,6 @@ class _TeamDetailPageState extends State<TeamDetailPage>
   @override
   void initState() {
     super.initState();
-    // The number of tabs is now 3
     _tabController = TabController(length: 3, vsync: this);
   }
 
@@ -48,7 +52,6 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     }
 
     return StreamBuilder<TeamModel>(
-        // Listen to live updates for the team
         stream: firestoreService.getTeamStream(widget.team.id),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -63,8 +66,8 @@ class _TeamDetailPageState extends State<TeamDetailPage>
 
           final team = snapshot.data!;
 
-          // Check for membership before showing content
-          if (!team.members.containsKey(userModel.uid)) {
+          // Admins can view any team, but other users must be members.
+          if (!team.members.containsKey(userModel.uid) && !widget.isAdminOverride) {
             return Scaffold(
               appBar: AppBar(title: const Text("Access Denied")),
               body: const Center(
@@ -81,18 +84,19 @@ class _TeamDetailPageState extends State<TeamDetailPage>
 
           final userTeamRole = team.members[userModel.uid] ?? 'member';
 
-          // Define granular permissions based on the user's role
           final isOwner = userTeamRole == 'owner';
           final isManager = userTeamRole == 'manager';
           final isCoach = userTeamRole == 'coach';
-
-          final canManageEvents = isOwner || isManager || isCoach;
-          final canManageRoster = isOwner || isManager;
-          final canAccessSettings = isOwner || isManager;
+          
+          // An admin who is not a member has read-only access.
+          // Permissions are only granted if they are an actual member with the correct role.
+          final canManageEvents = (isOwner || isManager || isCoach) && team.members.containsKey(userModel.uid);
+          final canManageRoster = (isOwner || isManager) && team.members.containsKey(userModel.uid);
+          final canAccessSettings = (isOwner || isManager) && team.members.containsKey(userModel.uid);
 
           return Scaffold(
             appBar: AppBar(
-              title: Text(team.teamName), // Use live team name
+              title: Text(team.teamName),
               actions: [
                 if (canAccessSettings)
                   IconButton(
@@ -104,7 +108,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                         MaterialPageRoute(
                           builder: (context) => TeamSettingsPage(
                             team: team,
-                            isOwner: isOwner, // Pass owner status
+                            isOwner: isOwner,
                           ),
                         ),
                       );
@@ -141,7 +145,6 @@ class _AnnouncementsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Per requirements, all members can post announcements.
     return Scaffold(
       body: StreamBuilder<List<AnnouncementModel>>(
         stream:
@@ -1239,7 +1242,6 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
   Future<void> _performSearch() async {
     setState(() => _isLoading = true);
     final firestoreService = context.read<FirestoreService>();
-    // The searchUsers function now handles both empty and non-empty queries
     final results = await firestoreService.searchUsers(_searchController.text);
     if (mounted) {
       setState(() {
@@ -1312,7 +1314,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                     setState(() {
                       _selectedUser = null;
                       _searchController.clear();
-                      _performSearch(); // Re-fetch all users
+                      _performSearch();
                     });
                   },
                 ),
@@ -1424,7 +1426,7 @@ class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
     try {
       await firestoreService.transferOwnership(
           widget.team.id, widget.newOwner.uid, currentUserId);
-      navigator.pop(); // Close the dialog
+      navigator.pop();
       messenger.showSnackBar(SnackBar(
           content:
               Text('Ownership successfully transferred to ${widget.newOwner.displayName}'),
