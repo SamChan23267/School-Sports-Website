@@ -60,6 +60,16 @@ class FirestoreService {
     await _db.collection('users').doc(userId).update({'appRole': newRole});
   }
 
+  /// Updates the user's display name in their Firestore document.
+  Future<void> updateUserName(String userId, String newName) async {
+    await _db.collection('users').doc(userId).update({
+      'displayName': newName,
+      'displayName_lowercase': newName.toLowerCase(),
+    });
+  }
+
+  /// Deletes the user's document from the 'users' collection.
+  /// This is used by admins or by the user themselves during account deletion.
   Future<void> deleteUser(String userId) async {
     await _db.collection('users').doc(userId).delete();
   }

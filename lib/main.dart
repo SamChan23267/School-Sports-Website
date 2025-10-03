@@ -11,12 +11,14 @@ import 'contact_us_page.dart';
 import 'login_page.dart';
 import 'admin_page.dart';
 import 'teacher_panel_page.dart';
+import 'user_settings_page.dart'; // Import the new settings page
 import 'services/api_service.dart';
 import 'models.dart';
 import 'providers/user_provider.dart';
 import 'services/firestore_service.dart';
 import 'classroom_teams_page.dart';
 import 'followed_teams_page.dart';
+import 'services/auth_service.dart'; // Import AuthService for the provider
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +36,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => UserProvider()),
         Provider(create: (context) => FirestoreService()),
+        Provider(create: (context) => AuthService.instance), // Provide AuthService
       ],
       child: const MyApp(),
     ),
@@ -222,6 +225,16 @@ class _LandingPageState extends State<LandingPage> {
                     if (value == 'logout') {
                       Provider.of<UserProvider>(context, listen: false)
                           .signOut();
+                    } else if (value == 'settings') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => UserSettingsPage(
+                            themeMode: widget.themeMode,
+                            onToggleTheme: widget.onToggleTheme,
+                          ),
+                        ),
+                      );
                     }
                   },
                   itemBuilder: (BuildContext context) =>
@@ -243,6 +256,10 @@ class _LandingPageState extends State<LandingPage> {
                       ),
                     ),
                     const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      value: 'settings',
+                      child: Text('Settings'),
+                    ),
                     const PopupMenuItem<String>(
                       value: 'logout',
                       child: Text('Logout'),
@@ -938,4 +955,3 @@ class _FixtureResultCard extends StatelessWidget {
     );
   }
 }
-
