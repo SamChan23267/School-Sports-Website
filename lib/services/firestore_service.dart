@@ -26,6 +26,13 @@ class FirestoreService {
         'photoURL': user.photoURL ?? '',
         'appRole': 'student',
         'followedTeams': [],
+        // Initialize new fields
+        'fullName': null,
+        'birthday': null,
+        'phoneNumber': null,
+        'emergencyContactName': null,
+        'emergencyContactPhone': null,
+        'medicalConditions': null,
       });
     } else {
       // Existing user, check if the lowercase field is missing and add it.
@@ -55,12 +62,7 @@ class FirestoreService {
         .map((doc) => UserModel.fromFirestore(doc.data()))
         .toList();
   }
-
-  Future<void> updateUserRole(String userId, String newRole) async {
-    await _db.collection('users').doc(userId).update({'appRole': newRole});
-  }
-
-  /// Updates the user's display name in their Firestore document.
+  
   Future<void> updateUserName(String userId, String newName) async {
     await _db.collection('users').doc(userId).update({
       'displayName': newName,
@@ -68,8 +70,29 @@ class FirestoreService {
     });
   }
 
-  /// Deletes the user's document from the 'users' collection.
-  /// This is used by admins or by the user themselves during account deletion.
+  Future<void> updateUserProfileInfo({
+    required String uid,
+    required String? fullName,
+    required DateTime? birthday,
+    required String? phoneNumber,
+    required String? contactName,
+    required String? contactPhone,
+    required String? medicalNotes,
+  }) async {
+    await _db.collection('users').doc(uid).update({
+      'fullName': fullName,
+      'birthday': birthday != null ? Timestamp.fromDate(birthday) : null,
+      'phoneNumber': phoneNumber,
+      'emergencyContactName': contactName,
+      'emergencyContactPhone': contactPhone,
+      'medicalConditions': medicalNotes,
+    });
+  }
+
+  Future<void> updateUserRole(String userId, String newRole) async {
+    await _db.collection('users').doc(userId).update({'appRole': newRole});
+  }
+
   Future<void> deleteUser(String userId) async {
     await _db.collection('users').doc(userId).delete();
   }
@@ -446,3 +469,4 @@ class FirestoreService {
         .map((snapshot) => EventModel.fromFirestore(snapshot));
   }
 }
+

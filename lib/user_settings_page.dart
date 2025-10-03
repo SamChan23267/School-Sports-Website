@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../providers/user_provider.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import 'user_profile_page.dart'; // Import the new page
 
 class UserSettingsPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -185,7 +186,7 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Profile Information',
+                    Text('Account Information',
                         style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 24),
                     Center(
@@ -200,9 +201,10 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nameController,
-                      readOnly: !_isEditingName, // FIX: Use readOnly instead of enabled
+                      readOnly: !_isEditingName,
                       decoration: InputDecoration(
                         labelText: 'Display Name',
+                        helperText: 'This is the name other users will see in the app.',
                         suffixIcon: IconButton(
                           icon: Icon(_isEditingName ? Icons.clear : Icons.edit),
                           onPressed: () {
@@ -247,7 +249,25 @@ class _UserSettingsPageState extends State<UserSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-
+          // Link to User Profile Page
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ListTile(
+              leading: const Icon(Icons.account_circle_outlined),
+              title: const Text('My Profile'),
+              subtitle: const Text('Update personal, emergency, and medical info.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const UserProfilePage(),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
           // App Settings Section
           Card(
             clipBehavior: Clip.antiAlias,
