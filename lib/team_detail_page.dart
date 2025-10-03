@@ -79,14 +79,21 @@ class _TeamDetailPageState extends State<TeamDetailPage>
           }
 
           final userTeamRole = team.members[userModel.uid] ?? 'member';
-          final canManage =
-              userTeamRole == 'owner' || userTeamRole == 'headCoach';
+
+          // Define granular permissions based on the user's role
+          final isOwner = userTeamRole == 'owner';
+          final isManager = userTeamRole == 'manager';
+          final isCoach = userTeamRole == 'coach';
+
+          final canManageEvents = isOwner || isManager || isCoach;
+          final canManageRoster = isOwner || isManager;
+          final canAccessSettings = isOwner || isManager;
 
           return Scaffold(
             appBar: AppBar(
               title: Text(team.teamName), // Use live team name
               actions: [
-                if (canManage)
+                if (canAccessSettings)
                   IconButton(
                     icon: const Icon(Icons.settings),
                     tooltip: 'Team Settings',
@@ -94,7 +101,10 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => TeamSettingsPage(team: team),
+                          builder: (context) => TeamSettingsPage(
+                            team: team,
+                            isOwner: isOwner, // Pass owner status
+                          ),
                         ),
                       );
                     },
@@ -114,9 +124,10 @@ class _TeamDetailPageState extends State<TeamDetailPage>
               controller: _tabController,
               children: [
                 _AnnouncementsTab(team: team),
-                _EventsTab(team: team, canManage: canManage),
+                _EventsTab(team: team, canManage: canManageEvents),
                 const _FeatureComingSoonTab(featureName: 'Gallery'),
-                _RosterTab(team: team, canManage: canManage),
+                _RosterTab(
+                    team: team, canManage: canManageRoster, isOwner: isOwner),
               ],
             ),
           );
@@ -131,6 +142,7 @@ class _AnnouncementsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Per requirements, all members can post announcements.
     return Scaffold(
       body: StreamBuilder<List<AnnouncementModel>>(
         stream:
@@ -139,12 +151,13 @@ class _AnnouncementsTab extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
+          }
           final announcements = snapshot.data ?? [];
-          if (announcements.isEmpty)
+          if (announcements.isEmpty) {
             return const Center(child: Text("No announcements yet."));
-
+          }
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: announcements.length,
@@ -184,8 +197,8 @@ class _AnnouncementCard extends StatelessWidget {
         onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (context) =>
-                    _AnnouncementDetailPage(team: team, announcement: announcement))),
+                builder: (context) => _AnnouncementDetailPage(
+                    team: team, announcement: announcement))),
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
@@ -251,8 +264,9 @@ class _ReactionButtons extends StatelessWidget {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               minimumSize: Size.zero,
-              backgroundColor:
-                  isReacted ? Theme.of(context).colorScheme.primaryContainer : null,
+              backgroundColor: isReacted
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : null,
             ),
             onPressed: () {
               firestoreService.toggleReaction(
@@ -314,10 +328,8 @@ class _AnnouncementDetailPage extends StatelessWidget {
                   stream: firestoreService.getRepliesStream(
                       team.id, announcement.id),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Center(
-                          child: CircularProgressIndicator());
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
                     }
                     final replies = snapshot.data ?? [];
                     if (replies.isEmpty) {
@@ -335,8 +347,8 @@ class _AnnouncementDetailPage extends StatelessWidget {
                         return ListTile(
                           title: Text(reply.authorName),
                           subtitle: Text(reply.content),
-                          trailing: Text(
-                              DateFormat.yMd().format(reply.timestamp.toDate())),
+                          trailing: Text(DateFormat.yMd()
+                              .format(reply.timestamp.toDate())),
                         );
                       },
                     );
@@ -486,6 +498,10 @@ class _EventsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
+    final userModel = context.read<UserProvider>().userModel!;
+    final userTeamRole = team.members[userModel.uid] ?? 'member';
+    final canManageEvents = ['owner', 'manager', 'coach'].contains(userTeamRole);
+
     return Scaffold(
       body: StreamBuilder<List<EventModel>>(
         stream: firestoreService.getEventsStream(team.id),
@@ -493,12 +509,13 @@ class _EventsTab extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
+          }
           final events = snapshot.data ?? [];
-          if (events.isEmpty)
+          if (events.isEmpty) {
             return const Center(child: Text("No upcoming events."));
-
+          }
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: events.length,
@@ -540,7 +557,9 @@ class _EventsTab extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                             builder: (context) => _EventDetailPage(
-                                team: team, eventId: event.id)));
+                                team: team,
+                                eventId: event.id,
+                                canManageEvents: canManageEvents)));
                   },
                 ),
               );
@@ -563,8 +582,12 @@ class _EventsTab extends StatelessWidget {
 class _EventDetailPage extends StatelessWidget {
   final TeamModel team;
   final String eventId;
+  final bool canManageEvents;
 
-  const _EventDetailPage({required this.team, required this.eventId});
+  const _EventDetailPage(
+      {required this.team,
+      required this.eventId,
+      required this.canManageEvents});
 
   String _formatEventTime(EventModel event) {
     final start = event.eventDate.toDate();
@@ -585,8 +608,8 @@ class _EventDetailPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Event?'),
-        content:
-            const Text('Are you sure you want to permanently delete this event?'),
+        content: const Text(
+            'Are you sure you want to permanently delete this event?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -638,13 +661,12 @@ class _EventDetailPage extends StatelessWidget {
           }
 
           final event = snapshot.data!;
-          final isCreator = userModel.uid == event.createdBy;
 
           return Scaffold(
             appBar: AppBar(
               title: Text(event.title),
               actions: [
-                if (isCreator)
+                if (canManageEvents)
                   IconButton(
                     icon: const Icon(Icons.edit),
                     onPressed: () {
@@ -658,7 +680,7 @@ class _EventDetailPage extends StatelessWidget {
                       );
                     },
                   ),
-                if (isCreator)
+                if (canManageEvents)
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => _deleteEvent(context, event),
@@ -677,7 +699,8 @@ class _EventDetailPage extends StatelessWidget {
                     leading: const Icon(Icons.calendar_today),
                     title: Text(_formatEventTime(event)),
                   ),
-                  if (event.description != null && event.description!.isNotEmpty)
+                  if (event.description != null &&
+                      event.description!.isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.short_text),
                       title: Text(event.description!),
@@ -891,8 +914,8 @@ class _EventDialogState extends State<_EventDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(
-          widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
+      title:
+          Text(widget.eventToEdit == null ? 'Create New Event' : 'Edit Event'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -1008,12 +1031,13 @@ class _EventDialogState extends State<_EventDialog> {
 class _RosterTab extends StatelessWidget {
   final TeamModel team;
   final bool canManage;
-  const _RosterTab({required this.team, required this.canManage});
+  final bool isOwner;
+  const _RosterTab(
+      {required this.team, required this.canManage, required this.isOwner});
 
   void _showAddMemberDialog(BuildContext context) {
     showDialog(
       context: context,
-      // Use a builder to get a new context for the dialog
       builder: (dialogContext) => _AddMemberDialog(team: team),
     );
   }
@@ -1021,8 +1045,12 @@ class _RosterTab extends StatelessWidget {
   void _showChangeRoleDialog(
       BuildContext context, TeamModel team, UserModel member) {
     final firestoreService = context.read<FirestoreService>();
+    final currentUserId = context.read<UserProvider>().userModel!.uid;
+
     String selectedRole = team.members[member.uid] ?? 'member';
-    final availableRoles = ['member', 'coach', 'manager'];
+    final availableRoles = isOwner
+        ? ['member', 'coach', 'manager', 'owner']
+        : ['member', 'coach', 'manager'];
 
     showDialog(
       context: context,
@@ -1035,6 +1063,8 @@ class _RosterTab extends StatelessWidget {
             items: availableRoles
                 .map((role) => DropdownMenuItem(
                       value: role,
+                      // Disable owner option if target user is the current owner
+                      enabled: !(role == 'owner' && member.uid == currentUserId),
                       child: Text(role[0].toUpperCase() + role.substring(1)),
                     ))
                 .toList(),
@@ -1053,16 +1083,28 @@ class _RosterTab extends StatelessWidget {
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 final navigator = Navigator.of(dialogContext);
-
                 try {
-                  await firestoreService.updateTeamMemberRole(
-                      team.id, member.uid, selectedRole);
-                  messenger.showSnackBar(
-                    SnackBar(
-                        content: Text(
-                            '${member.displayName}\'s role updated to $selectedRole.'),
-                        backgroundColor: Colors.green),
-                  );
+                  if (selectedRole == 'owner') {
+                    // Handle ownership transfer
+                    await firestoreService.transferOwnership(
+                        team.id, member.uid, currentUserId);
+                     messenger.showSnackBar(
+                      SnackBar(
+                          content: Text(
+                              'Ownership transferred to ${member.displayName}.'),
+                          backgroundColor: Colors.green),
+                    );
+                  } else {
+                    // Handle normal role update
+                    await firestoreService.updateTeamMemberRole(
+                        team.id, member.uid, selectedRole);
+                    messenger.showSnackBar(
+                      SnackBar(
+                          content: Text(
+                              '${member.displayName}\'s role updated to $selectedRole.'),
+                          backgroundColor: Colors.green),
+                    );
+                  }
                 } catch (e) {
                   messenger.showSnackBar(
                     SnackBar(
@@ -1094,9 +1136,23 @@ class _RosterTab extends StatelessWidget {
           return StreamBuilder<UserModel>(
             stream: firestoreService.getUserStream(userId),
             builder: (context, snapshot) {
-              if (!snapshot.hasData)
+              if (!snapshot.hasData) {
                 return const ListTile(title: LinearProgressIndicator());
+              }
               final user = snapshot.data!;
+              final memberRole = team.members[user.uid] ?? 'member';
+
+              // Determine if the current user can manage this specific member
+              bool canManageThisMember = false;
+              if(canManage) {
+                if (isOwner && user.uid != currentUserId) {
+                  canManageThisMember = true;
+                } else if (!isOwner && memberRole != 'owner' && memberRole != 'manager') {
+                  // A manager can't manage another manager or the owner
+                  canManageThisMember = true;
+                }
+              }
+
               return ListTile(
                 leading:
                     CircleAvatar(backgroundImage: NetworkImage(user.photoURL)),
@@ -1106,9 +1162,7 @@ class _RosterTab extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Chip(label: Text(role)),
-                    if (canManage &&
-                        user.uid != currentUserId &&
-                        role != 'owner')
+                    if (canManageThisMember)
                       IconButton(
                         icon: const Icon(Icons.edit_note),
                         tooltip: 'Change ${user.displayName}\'s role',
@@ -1116,9 +1170,7 @@ class _RosterTab extends StatelessWidget {
                           _showChangeRoleDialog(context, team, user);
                         },
                       ),
-                    if (canManage &&
-                        user.uid != currentUserId &&
-                        role != 'owner')
+                    if (canManageThisMember)
                       IconButton(
                         icon: const Icon(Icons.remove_circle_outline,
                             color: Colors.red),
@@ -1221,8 +1273,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
           widget.team.id, _selectedUser!.uid, _selectedRole);
       navigator.pop();
       messenger.showSnackBar(SnackBar(
-        content:
-            Text('Successfully added ${_selectedUser!.displayName} to the team.'),
+        content: Text(
+            'Successfully added ${_selectedUser!.displayName} to the team.'),
         backgroundColor: Colors.green,
       ));
     } catch (e) {
@@ -1283,7 +1335,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                               final user = _searchResults[index];
                               return ListTile(
                                 leading: CircleAvatar(
-                                    backgroundImage: NetworkImage(user.photoURL)),
+                                    backgroundImage:
+                                        NetworkImage(user.photoURL)),
                                 title: Text(user.displayName),
                                 subtitle: Text(user.email),
                                 onTap: () {
@@ -1304,7 +1357,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                 items: ['member', 'coach', 'manager']
                     .map((role) => DropdownMenuItem(
                           value: role,
-                          child: Text(role[0].toUpperCase() + role.substring(1)),
+                          child:
+                              Text(role[0].toUpperCase() + role.substring(1)),
                         ))
                     .toList(),
                 onChanged: (value) {
@@ -1355,4 +1409,3 @@ class _FeatureComingSoonTab extends StatelessWidget {
     );
   }
 }
-

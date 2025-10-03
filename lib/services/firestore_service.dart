@@ -251,6 +251,24 @@ class FirestoreService {
         .update({'members.$userId': newRole});
   }
 
+  Future<void> transferOwnership(
+      String teamId, String newOwnerId, String oldOwnerId) async {
+    final teamRef = _db.collection('teams').doc(teamId);
+
+    return _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(teamRef);
+      if (!snapshot.exists) {
+        throw Exception("Team does not exist!");
+      }
+
+      // Prepare the updates
+      transaction.update(teamRef, {
+        'members.$newOwnerId': 'owner',
+        'members.$oldOwnerId': 'manager', // Demote the old owner
+      });
+    });
+  }
+
   // --- Announcements ---
   Future<void> postAnnouncement(
       String teamId, UserModel author, String title, String content) async {
@@ -418,4 +436,3 @@ class FirestoreService {
         .map((snapshot) => EventModel.fromFirestore(snapshot));
   }
 }
-

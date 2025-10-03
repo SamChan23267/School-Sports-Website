@@ -7,7 +7,9 @@ import '../services/firestore_service.dart';
 
 class TeamSettingsPage extends StatefulWidget {
   final TeamModel team;
-  const TeamSettingsPage({super.key, required this.team});
+  final bool isOwner; // Receive owner status from the detail page
+  const TeamSettingsPage(
+      {super.key, required this.team, required this.isOwner});
 
   @override
   State<TeamSettingsPage> createState() => _TeamSettingsPageState();
@@ -190,37 +192,38 @@ class _TeamSettingsPageState extends State<TeamSettingsPage> {
                   ),
 
                   const SizedBox(height: 32),
-                  // Danger Zone
-                  Card(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Danger Zone',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onErrorContainer),
-                          ),
-                          const SizedBox(height: 16),
-                          ListTile(
-                            leading: Icon(Icons.delete_forever,
-                                color: Theme.of(context).colorScheme.error),
-                            title: const Text('Delete this Team'),
-                            subtitle: const Text(
-                                'Once you delete a team, there is no going back.'),
-                            onTap: _deleteTeam,
-                          )
-                        ],
+                  // Danger Zone - Only visible to the owner
+                  if (widget.isOwner)
+                    Card(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Danger Zone',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onErrorContainer),
+                            ),
+                            const SizedBox(height: 16),
+                            ListTile(
+                              leading: Icon(Icons.delete_forever,
+                                  color: Theme.of(context).colorScheme.error),
+                              title: const Text('Delete this Team'),
+                              subtitle: const Text(
+                                  'Once you delete a team, there is no going back.'),
+                              onTap: _deleteTeam,
+                            )
+                          ],
+                        ),
                       ),
-                    ),
-                  )
+                    )
                 ],
               );
             }));
