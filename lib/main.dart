@@ -19,6 +19,7 @@ import 'services/firestore_service.dart';
 import 'classroom_teams_page.dart';
 import 'followed_teams_page.dart';
 import 'services/auth_service.dart'; // Import AuthService for the provider
+import 'calendar_page.dart'; // Import the new calendar page
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,7 +104,8 @@ enum AppView {
   results,
   selectTeam,
   classroomTeams,
-  followedTeams
+  followedTeams,
+  calendar
 }
 
 class LandingPage extends StatefulWidget {
@@ -191,6 +193,8 @@ class _LandingPageState extends State<LandingPage> {
         return 'My Classroom Teams';
       case AppView.followedTeams:
         return 'Followed Teams';
+      case AppView.calendar:
+        return 'Fixtures Calendar';
     }
   }
 
@@ -347,6 +351,18 @@ class _LandingPageState extends State<LandingPage> {
                   },
                 ),
                 ListTile(
+                  leading: const Icon(Icons.calendar_month),
+                  title: const Text('Calendar'),
+                  selected: _currentView == AppView.calendar,
+                  onTap: () {
+                    setState(() {
+                      _currentView = AppView.calendar;
+                      _selectTeamParams = null;
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.group_work),
                   title: const Text('Select Team'),
                   selected: _currentView == AppView.selectTeam,
@@ -470,6 +486,9 @@ class _LandingPageState extends State<LandingPage> {
             : const Center(
                 child: Text("Please log in to see your followed teams."),
               );
+        break;
+      case AppView.calendar:
+        content = const CalendarPage();
         break;
     }
     return Center(
