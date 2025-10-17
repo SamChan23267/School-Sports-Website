@@ -11,15 +11,16 @@ import 'contact_us_page.dart';
 import 'login_page.dart';
 import 'admin_page.dart';
 import 'teacher_panel_page.dart';
-import 'user_settings_page.dart'; // Import the new settings page
+import 'user_settings_page.dart';
 import 'services/api_service.dart';
 import 'models.dart';
 import 'providers/user_provider.dart';
 import 'services/firestore_service.dart';
 import 'classroom_teams_page.dart';
 import 'followed_teams_page.dart';
-import 'services/auth_service.dart'; // Import AuthService for the provider
-import 'calendar_page.dart'; // Import the new calendar page
+import 'services/auth_service.dart';
+import 'calendar_page.dart';
+import 'my_calendar_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +38,9 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => UserProvider()),
         Provider(create: (context) => FirestoreService()),
-        Provider(create: (context) => AuthService.instance), // Provide AuthService
+        Provider(create: (context) => AuthService.instance),
+        // **FIX**: Added the ApiService provider
+        Provider(create: (context) => ApiService()),
       ],
       child: const MyApp(),
     ),
@@ -105,7 +108,8 @@ enum AppView {
   selectTeam,
   classroomTeams,
   followedTeams,
-  calendar
+  calendar,
+  myCalendar,
 }
 
 class LandingPage extends StatefulWidget {
@@ -195,6 +199,8 @@ class _LandingPageState extends State<LandingPage> {
         return 'Followed Teams';
       case AppView.calendar:
         return 'Fixtures Calendar';
+      case AppView.myCalendar:
+        return 'My Calendar';
     }
   }
 
@@ -377,6 +383,19 @@ class _LandingPageState extends State<LandingPage> {
                 if (userModel != null) const Divider(),
                 if (userModel != null)
                   ListTile(
+                    leading: const Icon(Icons.person_pin_circle_outlined),
+                    title: const Text('My Calendar'),
+                    selected: _currentView == AppView.myCalendar,
+                    onTap: () {
+                      setState(() {
+                        _currentView = AppView.myCalendar;
+                        _selectTeamParams = null;
+                      });
+                      Navigator.pop(context);
+                    },
+                  ),
+                if (userModel != null)
+                  ListTile(
                     leading: const Icon(Icons.group),
                     title: const Text('My Classroom Teams'),
                     selected: _currentView == AppView.classroomTeams,
@@ -489,6 +508,9 @@ class _LandingPageState extends State<LandingPage> {
         break;
       case AppView.calendar:
         content = const CalendarPage();
+        break;
+      case AppView.myCalendar:
+        content = const MyCalendarPage();
         break;
     }
     return Center(
@@ -974,3 +996,4 @@ class _FixtureResultCard extends StatelessWidget {
     );
   }
 }
+

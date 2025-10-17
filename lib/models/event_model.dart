@@ -11,6 +11,7 @@ class EventModel {
   final String authorName; // Display name of the creator
   final Map<String, String>
       responses; // New: Map of UID to status ('going', 'maybe', 'not_going')
+  final String teamId; // ID of the team this event belongs to
 
   EventModel({
     required this.id,
@@ -21,6 +22,7 @@ class EventModel {
     required this.createdBy,
     required this.authorName,
     required this.responses,
+    required this.teamId,
   });
 
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
@@ -34,6 +36,8 @@ class EventModel {
       createdBy: data['createdBy'] ?? '',
       authorName: data['authorName'] ?? 'Unknown',
       responses: Map<String, String>.from(data['responses'] ?? {}),
+      teamId: data['teamId'] ?? '',
     );
   }
 }
+

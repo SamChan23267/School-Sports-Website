@@ -17,7 +17,7 @@ class FirestoreService {
     final displayName = user.displayName ?? 'No Name';
 
     if (!snapshot.exists) {
-      // New user, create the profile with the lowercase field
+      // New user, create the profile with all necessary fields
       await userRef.set({
         'uid': user.uid,
         'displayName': displayName,
@@ -26,7 +26,7 @@ class FirestoreService {
         'photoURL': user.photoURL ?? '',
         'appRole': 'student',
         'followedTeams': [],
-        // Initialize new fields
+        'memberOfTeams': [], // Ensure this is created for new users
         'fullName': null,
         'birthday': null,
         'phoneNumber': null,
@@ -35,13 +35,19 @@ class FirestoreService {
         'medicalConditions': null,
       });
     } else {
-      // Existing user, check if the lowercase field is missing and add it.
-      // This makes existing users searchable by name after they log in again.
+      // Existing user, ensure the new fields exist
       final data = snapshot.data();
-      if (data != null && data['displayName_lowercase'] == null) {
-        await userRef.update({
-          'displayName_lowercase': displayName.toLowerCase(),
-        });
+      if (data != null) {
+        final Map<String, dynamic> updates = {};
+        if (data['displayName_lowercase'] == null) {
+          updates['displayName_lowercase'] = displayName.toLowerCase();
+        }
+        if (data['memberOfTeams'] == null) {
+          updates['memberOfTeams'] = [];
+        }
+        if (updates.isNotEmpty) {
+          await userRef.update(updates);
+        }
       }
     }
   }
@@ -54,9 +60,7 @@ class FirestoreService {
         .map((snapshot) => UserModel.fromFirestore(snapshot.data() ?? {}));
   }
 
-  /// Fetches an initial list of users to display.
   Future<List<UserModel>> getAllUsers() async {
-    // We limit the initial fetch to avoid loading the entire user base at once.
     final snapshot = await _db.collection('users').limit(20).get();
     return snapshot.docs
         .map((doc) => UserModel.fromFirestore(doc.data()))
@@ -109,17 +113,12 @@ class FirestoreService {
     return null;
   }
 
-  /// Searches for users by display name or email. Now case-insensitive.
-  /// If the query is empty, it returns an initial list of all users.
   Future<List<UserModel>> searchUsers(String query) async {
-    // If the search box is empty, show an initial list of users.
     if (query.isEmpty) {
       return getAllUsers();
     }
     final lowerCaseQuery = query.toLowerCase();
 
-    // This type of query finds documents where the field value starts with the search query.
-    // It's the most efficient way to build "search-as-you-type" with Firestore.
     final nameQuery = _db
         .collection('users')
         .where('displayName_lowercase', isGreaterThanOrEqualTo: lowerCaseQuery)
@@ -133,12 +132,10 @@ class FirestoreService {
         .where('email', isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff')
         .limit(5);
 
-    // Run both queries in parallel.
     final results = await Future.wait([nameQuery.get(), emailQuery.get()]);
     final nameResults = results[0];
     final emailResults = results[1];
 
-    // Use a Map to combine and automatically de-duplicate the results.
     final Map<String, UserModel> users = {};
     for (var doc in nameResults.docs) {
       final user = UserModel.fromFirestore(doc.data());
@@ -177,6 +174,14 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => TeamModel.fromFirestore(snapshot));
   }
+  
+  Future<TeamModel?> getTeamById(String teamId) async {
+    final doc = await _db.collection('teams').doc(teamId).get();
+    if (doc.exists) {
+      return TeamModel.fromFirestore(doc);
+    }
+    return null;
+  }
 
   Stream<List<TeamModel>> getTeamsForUser(String userId) {
     return _db
@@ -194,14 +199,21 @@ class FirestoreService {
   }
 
   Future<void> createTeam(String teamName, UserModel owner) async {
-    await _db.collection('teams').add({
-      'teamName': teamName,
-      'sport': null,
-      'members': {
-        owner.uid: 'owner',
-      },
-      'joinCodeEnabled': false,
-      'joinCode': null,
+    final newTeamRef = _db.collection('teams').doc();
+    
+    await _db.runTransaction((transaction) async {
+      transaction.set(newTeamRef, {
+        'teamName': teamName,
+        'sport': null,
+        'members': { owner.uid: 'owner' },
+        'joinCodeEnabled': false,
+        'joinCode': null,
+      });
+
+      final userRef = _db.collection('users').doc(owner.uid);
+      transaction.update(userRef, {
+        'memberOfTeams': FieldValue.arrayUnion([newTeamRef.id])
+      });
     });
   }
 
@@ -224,14 +236,12 @@ class FirestoreService {
   Future<void> updateJoinCodeSettings(
       {required String teamId, required bool enabled}) async {
     if (enabled) {
-      // Generate a new code every time it's enabled
       final newCode = _generateJoinCode();
       await _db
           .collection('teams')
           .doc(teamId)
           .update({'joinCodeEnabled': true, 'joinCode': newCode});
     } else {
-      // Disable and remove the code
       await _db
           .collection('teams')
           .doc(teamId)
@@ -266,14 +276,27 @@ class FirestoreService {
   // --- Roster Management ---
   Future<void> addTeamMember(
       String teamId, String userId, String role) async {
-    await _db.collection('teams').doc(teamId).update({'members.$userId': role});
+    final teamRef = _db.collection('teams').doc(teamId);
+    final userRef = _db.collection('users').doc(userId);
+
+    await _db.runTransaction((transaction) async {
+      transaction.update(teamRef, {'members.$userId': role});
+      transaction.update(userRef, {
+        'memberOfTeams': FieldValue.arrayUnion([teamId])
+      });
+    });
   }
 
   Future<void> removeTeamMember(String teamId, String userId) async {
-    await _db
-        .collection('teams')
-        .doc(teamId)
-        .update({'members.$userId': FieldValue.delete()});
+    final teamRef = _db.collection('teams').doc(teamId);
+    final userRef = _db.collection('users').doc(userId);
+
+     await _db.runTransaction((transaction) async {
+      transaction.update(teamRef, {'members.$userId': FieldValue.delete()});
+      transaction.update(userRef, {
+        'memberOfTeams': FieldValue.arrayRemove([teamId])
+      });
+    });
   }
 
   Future<void> updateTeamMemberRole(
@@ -294,10 +317,9 @@ class FirestoreService {
         throw Exception("Team does not exist!");
       }
 
-      // Prepare the updates
       transaction.update(teamRef, {
         'members.$newOwnerId': 'owner',
-        'members.$oldOwnerId': 'manager', // Demote the old owner
+        'members.$oldOwnerId': 'manager',
       });
     });
   }
@@ -409,6 +431,7 @@ class FirestoreService {
       'createdBy': author.uid,
       'authorName': author.displayName,
       'responses': {},
+      'teamId': teamId,
     });
   }
 
@@ -467,6 +490,35 @@ class FirestoreService {
         .doc(eventId)
         .snapshots()
         .map((snapshot) => EventModel.fromFirestore(snapshot));
+  }
+  
+  Future<List<EventModel>> getAllEventsForUser(UserModel user) async {
+    // This logic is now the same for ALL users, including admins.
+    // It securely fetches events only from teams the user is a member of.
+    final List<String> teamIds = user.memberOfTeams;
+    if (teamIds.isEmpty) {
+      print("User ${user.uid} is not a member of any teams.");
+      return [];
+    }
+
+    List<EventModel> allEvents = [];
+    for (final teamId in teamIds) {
+      try {
+        final eventsSnapshot = await _db
+            .collection('teams')
+            .doc(teamId)
+            .collection('events')
+            .get();
+        for (final eventDoc in eventsSnapshot.docs) {
+          allEvents.add(EventModel.fromFirestore(eventDoc));
+        }
+      } catch (e) {
+        print("Could not fetch events for team $teamId. Error: $e");
+        // Re-throw the error to be caught by the UI
+        throw Exception("Permission denied for team $teamId. Please check your Firestore rules.");
+      }
+    }
+    return allEvents;
   }
 }
 

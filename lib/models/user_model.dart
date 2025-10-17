@@ -8,7 +8,8 @@ class UserModel {
   final String photoURL;
   final String appRole;
   final List<String> followedTeams;
-  
+  final List<String> memberOfTeams; // New: To track team memberships
+
   // Expanded user profile fields
   final String? fullName;
   final Timestamp? birthday;
@@ -24,6 +25,7 @@ class UserModel {
     required this.photoURL,
     required this.appRole,
     required this.followedTeams,
+    required this.memberOfTeams, // New
     this.fullName,
     this.birthday,
     this.phoneNumber,
@@ -40,6 +42,7 @@ class UserModel {
       photoURL: data['photoURL'] ?? '',
       appRole: data['appRole'] ?? 'student',
       followedTeams: List<String>.from(data['followedTeams'] ?? []),
+      memberOfTeams: List<String>.from(data['memberOfTeams'] ?? []), // New
       fullName: data['fullName'],
       birthday: data['birthday'],
       phoneNumber: data['phoneNumber'],
