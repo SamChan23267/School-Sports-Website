@@ -1,39 +1,54 @@
+// lib/services/firestore_service.dart
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
+import '../models/team_model.dart';
+import '../models/announcement_model.dart';
+import '../models/event_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// --- UPDATED with Enhanced Error Handling ---
+  // --- User Methods ---
   Future<void> createUserProfile(User user) async {
     final userRef = _db.collection('users').doc(user.uid);
+    final snapshot = await userRef.get();
+    final displayName = user.displayName ?? 'No Name';
 
-    try {
-      // This "upsert" operation attempts to write to the database.
-      await userRef.set(
-        {
-          'uid': user.uid,
-          'displayName': user.displayName ?? 'No Name',
-          'email': user.email ?? 'No Email',
-          'photoURL': user.photoURL ?? '',
-          'appRole': 'student',
-        },
-        SetOptions(merge: true),
-      );
-    } on FirebaseException catch (e) {
-      // This will catch specific Firebase errors and give us a much better message.
-      print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      print("[FirestoreService] A FirebaseException occurred:");
-      print("Code: ${e.code}"); // e.g., 'permission-denied'
-      print("Message: ${e.message}");
-      print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      // Re-throw the exception so the UserProvider still knows something went wrong.
-      rethrow;
-    } catch (e) {
-      // Catch any other unexpected errors.
-      print("[FirestoreService] An unknown error occurred: $e");
-      rethrow;
+    if (!snapshot.exists) {
+      // New user, create the profile with all necessary fields
+      await userRef.set({
+        'uid': user.uid,
+        'displayName': displayName,
+        'displayName_lowercase': displayName.toLowerCase(),
+        'email': user.email ?? 'No Email',
+        'photoURL': user.photoURL ?? '',
+        'appRole': 'student',
+        'followedTeams': [],
+        'memberOfTeams': [], // Ensure this is created for new users
+        'fullName': null,
+        'birthday': null,
+        'phoneNumber': null,
+        'emergencyContactName': null,
+        'emergencyContactPhone': null,
+        'medicalConditions': null,
+      });
+    } else {
+      // Existing user, ensure the new fields exist
+      final data = snapshot.data();
+      if (data != null) {
+        final Map<String, dynamic> updates = {};
+        if (data['displayName_lowercase'] == null) {
+          updates['displayName_lowercase'] = displayName.toLowerCase();
+        }
+        if (data['memberOfTeams'] == null) {
+          updates['memberOfTeams'] = [];
+        }
+        if (updates.isNotEmpty) {
+          await userRef.update(updates);
+        }
+      }
     }
   }
 
@@ -44,4 +59,466 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => UserModel.fromFirestore(snapshot.data() ?? {}));
   }
+
+  Future<List<UserModel>> getAllUsers() async {
+    final snapshot = await _db.collection('users').limit(20).get();
+    return snapshot.docs
+        .map((doc) => UserModel.fromFirestore(doc.data()))
+        .toList();
+  }
+  
+  Future<void> updateUserName(String userId, String newName) async {
+    await _db.collection('users').doc(userId).update({
+      'displayName': newName,
+      'displayName_lowercase': newName.toLowerCase(),
+    });
+  }
+
+  Future<void> updateUserProfileInfo({
+    required String uid,
+    required String? fullName,
+    required DateTime? birthday,
+    required String? phoneNumber,
+    required String? contactName,
+    required String? contactPhone,
+    required String? medicalNotes,
+  }) async {
+    await _db.collection('users').doc(uid).update({
+      'fullName': fullName,
+      'birthday': birthday != null ? Timestamp.fromDate(birthday) : null,
+      'phoneNumber': phoneNumber,
+      'emergencyContactName': contactName,
+      'emergencyContactPhone': contactPhone,
+      'medicalConditions': medicalNotes,
+    });
+  }
+
+  Future<void> updateUserRole(String userId, String newRole) async {
+    await _db.collection('users').doc(userId).update({'appRole': newRole});
+  }
+
+  Future<void> deleteUser(String userId) async {
+    await _db.collection('users').doc(userId).delete();
+  }
+
+  Future<UserModel?> getUserByEmail(String email) async {
+    final querySnapshot = await _db
+        .collection('users')
+        .where('email', isEqualTo: email.trim().toLowerCase())
+        .limit(1)
+        .get();
+    if (querySnapshot.docs.isNotEmpty) {
+      return UserModel.fromFirestore(querySnapshot.docs.first.data());
+    }
+    return null;
+  }
+
+  Future<List<UserModel>> searchUsers(String query) async {
+    if (query.isEmpty) {
+      return getAllUsers();
+    }
+    final lowerCaseQuery = query.toLowerCase();
+
+    final nameQuery = _db
+        .collection('users')
+        .where('displayName_lowercase', isGreaterThanOrEqualTo: lowerCaseQuery)
+        .where('displayName_lowercase',
+            isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff')
+        .limit(5);
+
+    final emailQuery = _db
+        .collection('users')
+        .where('email', isGreaterThanOrEqualTo: lowerCaseQuery)
+        .where('email', isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff')
+        .limit(5);
+
+    final results = await Future.wait([nameQuery.get(), emailQuery.get()]);
+    final nameResults = results[0];
+    final emailResults = results[1];
+
+    final Map<String, UserModel> users = {};
+    for (var doc in nameResults.docs) {
+      final user = UserModel.fromFirestore(doc.data());
+      users[user.uid] = user;
+    }
+    for (var doc in emailResults.docs) {
+      final user = UserModel.fromFirestore(doc.data());
+      users[user.uid] = user;
+    }
+
+    return users.values.toList();
+  }
+
+  // --- Followed Teams Methods ---
+  Future<void> followTeam(
+      String userId, String sportName, String teamName) async {
+    final uniqueTeamId = '$sportName::$teamName';
+    await _db.collection('users').doc(userId).update({
+      'followedTeams': FieldValue.arrayUnion([uniqueTeamId])
+    });
+  }
+
+  Future<void> unfollowTeam(
+      String userId, String sportName, String teamName) async {
+    final uniqueTeamId = '$sportName::$teamName';
+    await _db.collection('users').doc(userId).update({
+      'followedTeams': FieldValue.arrayRemove([uniqueTeamId])
+    });
+  }
+
+  // --- Classroom Team Methods ---
+  Stream<TeamModel> getTeamStream(String teamId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .snapshots()
+        .map((snapshot) => TeamModel.fromFirestore(snapshot));
+  }
+  
+  Future<TeamModel?> getTeamById(String teamId) async {
+    final doc = await _db.collection('teams').doc(teamId).get();
+    if (doc.exists) {
+      return TeamModel.fromFirestore(doc);
+    }
+    return null;
+  }
+
+  Stream<List<TeamModel>> getTeamsForUser(String userId) {
+    return _db
+        .collection('teams')
+        .where('members.$userId', isNotEqualTo: null)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => TeamModel.fromFirestore(doc)).toList();
+    });
+  }
+
+  Future<List<TeamModel>> getAllTeams() async {
+    final snapshot = await _db.collection('teams').get();
+    return snapshot.docs.map((doc) => TeamModel.fromFirestore(doc)).toList();
+  }
+
+  Future<void> createTeam(String teamName, UserModel owner) async {
+    final newTeamRef = _db.collection('teams').doc();
+    
+    await _db.runTransaction((transaction) async {
+      transaction.set(newTeamRef, {
+        'teamName': teamName,
+        'sport': null,
+        'members': { owner.uid: 'owner' },
+        'joinCodeEnabled': false,
+        'joinCode': null,
+      });
+
+      final userRef = _db.collection('users').doc(owner.uid);
+      transaction.update(userRef, {
+        'memberOfTeams': FieldValue.arrayUnion([newTeamRef.id])
+      });
+    });
+  }
+
+  Future<void> deleteTeam(String teamId) async {
+    await _db.collection('teams').doc(teamId).delete();
+  }
+
+  Future<void> updateTeamName(String teamId, String newName) async {
+    await _db.collection('teams').doc(teamId).update({'teamName': newName});
+  }
+
+  // --- Join Code Methods ---
+  String _generateJoinCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random();
+    return String.fromCharCodes(Iterable.generate(
+        6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+  }
+
+  Future<void> updateJoinCodeSettings(
+      {required String teamId, required bool enabled}) async {
+    if (enabled) {
+      final newCode = _generateJoinCode();
+      await _db
+          .collection('teams')
+          .doc(teamId)
+          .update({'joinCodeEnabled': true, 'joinCode': newCode});
+    } else {
+      await _db
+          .collection('teams')
+          .doc(teamId)
+          .update({'joinCodeEnabled': false, 'joinCode': null});
+    }
+  }
+
+  Future<String> joinTeamWithCode(
+      {required String code, required String userId}) async {
+    final querySnapshot = await _db
+        .collection('teams')
+        .where('joinCode', isEqualTo: code.toUpperCase())
+        .where('joinCodeEnabled', isEqualTo: true)
+        .limit(1)
+        .get();
+
+    if (querySnapshot.docs.isEmpty) {
+      throw Exception('Invalid or expired join code.');
+    }
+
+    final teamDoc = querySnapshot.docs.first;
+    final team = TeamModel.fromFirestore(teamDoc);
+
+    if (team.members.containsKey(userId)) {
+      throw Exception('You are already a member of ${team.teamName}.');
+    }
+
+    await addTeamMember(team.id, userId, 'member');
+    return team.teamName;
+  }
+
+  // --- Roster Management ---
+  Future<void> addTeamMember(
+      String teamId, String userId, String role) async {
+    final teamRef = _db.collection('teams').doc(teamId);
+    final userRef = _db.collection('users').doc(userId);
+
+    await _db.runTransaction((transaction) async {
+      transaction.update(teamRef, {'members.$userId': role});
+      transaction.update(userRef, {
+        'memberOfTeams': FieldValue.arrayUnion([teamId])
+      });
+    });
+  }
+
+  Future<void> removeTeamMember(String teamId, String userId) async {
+    final teamRef = _db.collection('teams').doc(teamId);
+    final userRef = _db.collection('users').doc(userId);
+
+     await _db.runTransaction((transaction) async {
+      transaction.update(teamRef, {'members.$userId': FieldValue.delete()});
+      transaction.update(userRef, {
+        'memberOfTeams': FieldValue.arrayRemove([teamId])
+      });
+    });
+  }
+
+  Future<void> updateTeamMemberRole(
+      String teamId, String userId, String newRole) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .update({'members.$userId': newRole});
+  }
+
+  Future<void> transferOwnership(
+      String teamId, String newOwnerId, String oldOwnerId) async {
+    final teamRef = _db.collection('teams').doc(teamId);
+
+    return _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(teamRef);
+      if (!snapshot.exists) {
+        throw Exception("Team does not exist!");
+      }
+
+      transaction.update(teamRef, {
+        'members.$newOwnerId': 'owner',
+        'members.$oldOwnerId': 'manager',
+      });
+    });
+  }
+
+  // --- Announcements ---
+  Future<void> postAnnouncement(
+      String teamId, UserModel author, String title, String content) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .add({
+      'authorId': author.uid,
+      'authorName': author.displayName,
+      'title': title,
+      'content': content,
+      'timestamp': FieldValue.serverTimestamp(),
+      'reactions': {},
+      'replyCount': 0,
+    });
+  }
+
+  Stream<List<AnnouncementModel>> getAnnouncementsStream(String teamId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => AnnouncementModel.fromFirestore(doc))
+            .toList());
+  }
+
+  Future<void> toggleReaction(String teamId, String announcementId,
+      String userId, String emoji) async {
+    final docRef = _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .doc(announcementId);
+
+    return _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) {
+        throw Exception("Announcement does not exist!");
+      }
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final reactions =
+          Map<String, List<dynamic>>.from(data['reactions'] ?? {});
+
+      reactions.forEach((key, value) {
+        value.remove(userId);
+      });
+
+      if (reactions[emoji]?.contains(userId) != true) {
+        reactions.update(emoji, (value) => value..add(userId),
+            ifAbsent: () => [userId]);
+      }
+
+      transaction.update(docRef, {'reactions': reactions});
+    });
+  }
+
+  Future<void> addReplyToAnnouncement(String teamId, String announcementId,
+      UserModel author, String content) async {
+    final announcementRef = _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .doc(announcementId);
+    final replyRef = announcementRef.collection('replies');
+
+    await _db.runTransaction((transaction) async {
+      transaction.set(replyRef.doc(), {
+        'authorId': author.uid,
+        'authorName': author.displayName,
+        'content': content,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      transaction
+          .update(announcementRef, {'replyCount': FieldValue.increment(1)});
+    });
+  }
+
+  Stream<List<ReplyModel>> getRepliesStream(
+      String teamId, String announcementId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('announcements')
+        .doc(announcementId)
+        .collection('replies')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => ReplyModel.fromFirestore(doc)).toList());
+  }
+
+  // --- Events ---
+  Future<void> createEvent(String teamId, String title, String? description,
+      DateTime startDate, DateTime? endDate, UserModel author) async {
+    await _db.collection('teams').doc(teamId).collection('events').add({
+      'title': title,
+      'description': description,
+      'eventDate': Timestamp.fromDate(startDate),
+      'eventEndDate': endDate != null ? Timestamp.fromDate(endDate) : null,
+      'createdBy': author.uid,
+      'authorName': author.displayName,
+      'responses': {},
+      'teamId': teamId,
+    });
+  }
+
+  Future<void> updateEvent(String teamId, String eventId, String title,
+      String? description, DateTime startDate, DateTime? endDate) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .update({
+      'title': title,
+      'description': description,
+      'eventDate': Timestamp.fromDate(startDate),
+      'eventEndDate': endDate != null ? Timestamp.fromDate(endDate) : null,
+    });
+  }
+
+  Future<void> deleteEvent(String teamId, String eventId) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .delete();
+  }
+
+  Future<void> respondToEvent(
+      String teamId, String eventId, String userId, String status) async {
+    await _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .update({
+      'responses.$userId': status,
+    });
+  }
+
+  Stream<List<EventModel>> getEventsStream(String teamId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .orderBy('eventDate', descending: false)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => EventModel.fromFirestore(doc)).toList());
+  }
+
+  Stream<EventModel> getEventStream(String teamId, String eventId) {
+    return _db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .snapshots()
+        .map((snapshot) => EventModel.fromFirestore(snapshot));
+  }
+  
+  Future<List<EventModel>> getAllEventsForUser(UserModel user) async {
+    // This logic is now the same for ALL users, including admins.
+    // It securely fetches events only from teams the user is a member of.
+    final List<String> teamIds = user.memberOfTeams;
+    if (teamIds.isEmpty) {
+      print("User ${user.uid} is not a member of any teams.");
+      return [];
+    }
+
+    List<EventModel> allEvents = [];
+    for (final teamId in teamIds) {
+      try {
+        final eventsSnapshot = await _db
+            .collection('teams')
+            .doc(teamId)
+            .collection('events')
+            .get();
+        for (final eventDoc in eventsSnapshot.docs) {
+          allEvents.add(EventModel.fromFirestore(eventDoc));
+        }
+      } catch (e) {
+        print("Could not fetch events for team $teamId. Error: $e");
+        // Re-throw the error to be caught by the UI
+        throw Exception("Permission denied for team $teamId. Please check your Firestore rules.");
+      }
+    }
+    return allEvents;
+  }
 }
+

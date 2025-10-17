@@ -52,5 +52,26 @@ class AuthService {
       print("Error during sign out: $e");
     }
   }
-}
 
+  /// Deletes the currently signed-in user's account from Firebase Authentication.
+  /// Throws an exception if the user needs to re-authenticate.
+  Future<void> deleteCurrentUserAccount() async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await user.delete();
+      } else {
+        throw Exception("No user is currently signed in.");
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        // This is a critical security feature of Firebase.
+        // It prevents a stale login from performing sensitive actions.
+        throw Exception(
+            'This operation is sensitive and requires recent authentication. Please log out and sign in again before deleting your account.');
+      }
+      // Re-throw other Firebase-related errors
+      rethrow;
+    }
+  }
+}
