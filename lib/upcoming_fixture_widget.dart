@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'services/api_service.dart';
 import 'models.dart';
-import 'fixture_detail_screen.dart'; 
+import 'fixture_detail_screen.dart';
 
 
 // --- Filter Model and Enums ---
@@ -338,9 +338,19 @@ class _UpcomingFixtureWidgetState extends State<UpcomingFixtureWidget> {
                  return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('No fixtures match the current filters.', textAlign: TextAlign.center)));
               }
 
+              // Permanently sort the list based on the view
               filteredFixtures.sort((a, b) {
                   try {
-                    return DateTime.parse(b.dateTime).compareTo(DateTime.parse(a.dateTime));
+                    final dateA = DateTime.parse(a.dateTime);
+                    final dateB = DateTime.parse(b.dateTime);
+                    // For results, sort descending (most recent first)
+                    if (widget.isResultsView) {
+                      return dateB.compareTo(dateA);
+                    }
+                    // For upcoming fixtures, sort ascending (soonest first)
+                    else {
+                      return dateA.compareTo(dateB);
+                    }
                   } catch (e) {
                     return 0;
                   }
@@ -597,3 +607,4 @@ extension StringExtension on String {
       return "${this[0].toUpperCase()}${substring(1)}";
     }
 }
+
