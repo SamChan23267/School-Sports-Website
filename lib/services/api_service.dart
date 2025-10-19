@@ -12,8 +12,14 @@ class ApiService {
   final PlayHQApiService _playHQApi = PlayHQApiService();
 
   static const Map<String, String> _sportIcons = {
-    'Football (School Sport)': '⚽', 'Basketball (School Sport)': '🏀', 'Tennis': '🎾', 'Cricket': '🏏',
-    'Hockey (School Sport)': '🏒', 'Rugby Union': '🏉', 'Volleyball': '🏐', 'Netball': '🥅',
+    'Football (School Sport)': '⚽',
+    'Basketball (School Sport)': '🏀',
+    'Tennis (School Sport)': '🎾',
+    'Cricket': '🏏',
+    'Hockey (School Sport)': '🏒',
+    'Rugby Union': '🏉',
+    'Volleyball (School Sport)': '🏐',
+    'Water Polo (School Sport)': '🤽', 
     'Default': '🏅',
   };
 
