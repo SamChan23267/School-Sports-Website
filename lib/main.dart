@@ -21,6 +21,7 @@ import 'followed_teams_page.dart';
 import 'services/auth_service.dart';
 import 'calendar_page.dart';
 import 'my_calendar_page.dart';
+import 'dashboard_page.dart'; // Import the new dashboard page
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,6 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (context) => UserProvider()),
         Provider(create: (context) => FirestoreService()),
         Provider(create: (context) => AuthService.instance),
-        // **FIX**: Added the ApiService provider
         Provider(create: (context) => ApiService()),
       ],
       child: const MyApp(),
@@ -103,6 +103,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 enum AppView {
+  dashboard, // New view for the dashboard
   upcomingFixtures,
   results,
   selectTeam,
@@ -127,8 +128,16 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  AppView _currentView = AppView.upcomingFixtures;
+  AppView? _currentView;
   Map<String, String>? _selectTeamParams;
+  bool? _wasLoggedIn; // Tracks login state changes
+
+  void _navigateTo(AppView view, {Map<String, String>? params}) {
+    setState(() {
+      _currentView = view;
+      _selectTeamParams = params;
+    });
+  }
 
   void _showJoinTeamDialog() {
     final firestoreService = context.read<FirestoreService>();
@@ -185,8 +194,10 @@ class _LandingPageState extends State<LandingPage> {
         });
   }
 
-  String get _currentViewTitle {
-    switch (_currentView) {
+  String _getCurrentViewTitle(AppView view) {
+    switch (view) {
+      case AppView.dashboard:
+        return 'Dashboard';
       case AppView.upcomingFixtures:
         return 'Upcoming Fixtures';
       case AppView.results:
@@ -209,10 +220,27 @@ class _LandingPageState extends State<LandingPage> {
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
         final userModel = userProvider.userModel;
+        final isLoggedIn = userModel != null;
+
+        // Initialize login state tracker on the first build
+        _wasLoggedIn ??= isLoggedIn;
+
+        // Check if the login state has changed to reset the view
+        if (isLoggedIn != _wasLoggedIn) {
+          _currentView =
+              isLoggedIn ? AppView.dashboard : AppView.upcomingFixtures;
+          _wasLoggedIn = isLoggedIn; // Update the tracker
+        } else {
+          // If login state hasn't changed, set the initial view only if it's null
+          _currentView ??=
+              isLoggedIn ? AppView.dashboard : AppView.upcomingFixtures;
+        }
+
+        final currentView = _currentView!;
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(_currentViewTitle),
+            title: Text(_getCurrentViewTitle(currentView)),
             actions: [
               TextButton(
                 onPressed: () {
@@ -233,6 +261,7 @@ class _LandingPageState extends State<LandingPage> {
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'logout') {
+                      // The provider will notify listeners, and the logic above will handle the view change.
                       Provider.of<UserProvider>(context, listen: false)
                           .signOut();
                     } else if (value == 'settings') {
@@ -332,51 +361,51 @@ class _LandingPageState extends State<LandingPage> {
                       style:
                           Theme.of(context).primaryTextTheme.headlineMedium),
                 ),
+                if (userModel != null) ...[
+                  ListTile(
+                    leading: const Icon(Icons.dashboard),
+                    title: const Text('Dashboard'),
+                    selected: currentView == AppView.dashboard,
+                    onTap: () {
+                      _navigateTo(AppView.dashboard);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  const Divider(),
+                ],
                 ListTile(
                   leading: const Icon(Icons.calendar_today),
                   title: const Text('Upcoming Fixtures'),
-                  selected: _currentView == AppView.upcomingFixtures,
+                  selected: currentView == AppView.upcomingFixtures,
                   onTap: () {
-                    setState(() {
-                      _currentView = AppView.upcomingFixtures;
-                      _selectTeamParams = null;
-                    });
+                    _navigateTo(AppView.upcomingFixtures);
                     Navigator.pop(context);
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.emoji_events),
                   title: const Text('Results'),
-                  selected: _currentView == AppView.results,
+                  selected: currentView == AppView.results,
                   onTap: () {
-                    setState(() {
-                      _currentView = AppView.results;
-                      _selectTeamParams = null;
-                    });
+                    _navigateTo(AppView.results);
                     Navigator.pop(context);
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.calendar_month),
                   title: const Text('Calendar'),
-                  selected: _currentView == AppView.calendar,
+                  selected: currentView == AppView.calendar,
                   onTap: () {
-                    setState(() {
-                      _currentView = AppView.calendar;
-                      _selectTeamParams = null;
-                    });
+                    _navigateTo(AppView.calendar);
                     Navigator.pop(context);
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.group_work),
                   title: const Text('Select Team'),
-                  selected: _currentView == AppView.selectTeam,
+                  selected: currentView == AppView.selectTeam,
                   onTap: () {
-                    setState(() {
-                      _currentView = AppView.selectTeam;
-                      _selectTeamParams = null;
-                    });
+                    _navigateTo(AppView.selectTeam);
                     Navigator.pop(context);
                   },
                 ),
@@ -385,12 +414,9 @@ class _LandingPageState extends State<LandingPage> {
                   ListTile(
                     leading: const Icon(Icons.person_pin_circle_outlined),
                     title: const Text('My Calendar'),
-                    selected: _currentView == AppView.myCalendar,
+                    selected: currentView == AppView.myCalendar,
                     onTap: () {
-                      setState(() {
-                        _currentView = AppView.myCalendar;
-                        _selectTeamParams = null;
-                      });
+                      _navigateTo(AppView.myCalendar);
                       Navigator.pop(context);
                     },
                   ),
@@ -398,12 +424,9 @@ class _LandingPageState extends State<LandingPage> {
                   ListTile(
                     leading: const Icon(Icons.group),
                     title: const Text('My Classroom Teams'),
-                    selected: _currentView == AppView.classroomTeams,
+                    selected: currentView == AppView.classroomTeams,
                     onTap: () {
-                      setState(() {
-                        _currentView = AppView.classroomTeams;
-                        _selectTeamParams = null;
-                      });
+                      _navigateTo(AppView.classroomTeams);
                       Navigator.pop(context);
                     },
                   ),
@@ -411,12 +434,9 @@ class _LandingPageState extends State<LandingPage> {
                   ListTile(
                     leading: const Icon(Icons.star),
                     title: const Text('Followed Teams'),
-                    selected: _currentView == AppView.followedTeams,
+                    selected: currentView == AppView.followedTeams,
                     onTap: () {
-                      setState(() {
-                        _currentView = AppView.followedTeams;
-                        _selectTeamParams = null;
-                      });
+                      _navigateTo(AppView.followedTeams);
                       Navigator.pop(context);
                     },
                   ),
@@ -452,15 +472,15 @@ class _LandingPageState extends State<LandingPage> {
               ],
             ),
           ),
-          body: _buildCurrentView(userProvider),
-          floatingActionButton: _buildFloatingActionButton(),
+          body: _buildCurrentView(currentView, userProvider),
+          floatingActionButton: _buildFloatingActionButton(currentView),
         );
       },
     );
   }
 
-  Widget? _buildFloatingActionButton() {
-    if (_currentView == AppView.classroomTeams) {
+  Widget? _buildFloatingActionButton(AppView currentView) {
+    if (currentView == AppView.classroomTeams) {
       return FloatingActionButton(
         onPressed: _showJoinTeamDialog,
         tooltip: 'Join a Team',
@@ -470,9 +490,12 @@ class _LandingPageState extends State<LandingPage> {
     return null;
   }
 
-  Widget _buildCurrentView(UserProvider userProvider) {
+  Widget _buildCurrentView(AppView currentView, UserProvider userProvider) {
     Widget content;
-    switch (_currentView) {
+    switch (currentView) {
+      case AppView.dashboard:
+        content = DashboardPage(onNavigate: _navigateTo);
+        break;
       case AppView.upcomingFixtures:
         content = const UpcomingFixtureWidget(isResultsView: false);
         break;
@@ -496,10 +519,8 @@ class _LandingPageState extends State<LandingPage> {
         content = userProvider.userModel != null
             ? FollowedTeamsPage(
                 onTeamSelected: (sport, team) {
-                  setState(() {
-                    _currentView = AppView.selectTeam;
-                    _selectTeamParams = {'sport': sport, 'team': team};
-                  });
+                  _navigateTo(AppView.selectTeam,
+                      params: {'sport': sport, 'team': team});
                 },
               )
             : const Center(
