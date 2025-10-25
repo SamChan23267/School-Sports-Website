@@ -23,6 +23,11 @@ import 'calendar_page.dart';
 import 'my_calendar_page.dart';
 import 'dashboard_page.dart'; // Import the new dashboard page
 
+// Define the SHC Branding Colors from the PDF
+const Color kShcDarkBlue = Color(0xFF184287); // PMS 280
+const Color kShcLightBlue = Color(0xFF86C1EA); // PMS 283
+const Color kShcRed = Color(0xFFE30613); // PMS 485
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -55,7 +60,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode _themeMode = ThemeMode.dark; // Default to dark mode as per shc branch
 
   void _toggleTheme() {
     setState(() {
@@ -67,18 +72,37 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sports Fixtures',
+      title: 'SHC Sports', // Updated title slightly
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
+      theme: ThemeData( // Light Theme
         colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple, brightness: Brightness.light),
+            seedColor: kShcDarkBlue, brightness: Brightness.light),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+           // Explicitly set a dark foreground for the light theme's AppBar
+          foregroundColor: Colors.black87, // Use a dark color for text/icons
+           // Use the primary color generated from the seed for the background
+          // backgroundColor: kShcDarkBlue, // Optional: Force specific background
+           // Ensure title text also uses the foreground color
+          titleTextStyle: TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.w500),
+           // Ensure icons also use the foreground color
+          iconTheme: IconThemeData(color: Colors.black87),
+          actionsIconTheme: IconThemeData(color: Colors.black87),
+        ),
       ),
-      darkTheme: ThemeData(
+      darkTheme: ThemeData( // Dark Theme
         colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple, brightness: Brightness.dark),
-        scaffoldBackgroundColor: const Color(0xFF181A20),
+            seedColor: kShcDarkBlue, brightness: Brightness.dark),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          // Ensure AppBar text/icons are white against the dark theme's AppBar background
+           foregroundColor: Colors.white,
+           // Ensure title text also uses the foreground color
+           titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w500),
+            // Ensure icons also use the foreground color
+          iconTheme: IconThemeData(color: Colors.white),
+          actionsIconTheme: IconThemeData(color: Colors.white),
+        ),
       ),
       themeMode: _themeMode,
       home: FutureBuilder(
@@ -101,6 +125,33 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+
+// --- Widget for the Branding Stripe ---
+class _BrandingStripe extends StatelessWidget implements PreferredSizeWidget {
+  final double height;
+
+  const _BrandingStripe({this.height = 4.0}); // Adjust height as needed
+
+  @override
+  Widget build(BuildContext context) {
+    // Removed the Material wrapper - let it draw directly below AppBar content
+    return SizedBox(
+      height: height,
+      child: const Row(
+        children: [
+          Expanded(child: ColoredBox(color: kShcRed)),
+          Expanded(child: ColoredBox(color: kShcDarkBlue)),
+          Expanded(child: ColoredBox(color: kShcLightBlue)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Size get preferredSize => Size.fromHeight(height);
+}
+// ------------------------------------------
+
 
 enum AppView {
   dashboard, // New view for the dashboard
@@ -238,9 +289,17 @@ class _LandingPageState extends State<LandingPage> {
 
         final currentView = _currentView!;
 
+        // No need to manually calculate foreground color here, rely on AppBarTheme
+        // final appBarForegroundColor = ... ;
+
+
         return Scaffold(
           appBar: AppBar(
+             // foregroundColor is now handled by AppBarTheme
             title: Text(_getCurrentViewTitle(currentView)),
+            // --- Add the branding stripe below the AppBar ---
+            bottom: const _BrandingStripe(),
+            // -----------------------------------------------
             actions: [
               TextButton(
                 onPressed: () {
@@ -250,18 +309,19 @@ class _LandingPageState extends State<LandingPage> {
                         builder: (context) => const ContactUsPage()),
                   );
                 },
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).appBarTheme.foregroundColor,
-                ),
+                // Style automatically comes from AppBarTheme's foregroundColor
+                // style: TextButton.styleFrom(
+                //   foregroundColor: appBarForegroundColor,
+                // ),
                 child: const Text('Contact Us'),
               ),
               const SizedBox(width: 8),
               if (userModel != null)
                 PopupMenuButton<String>(
+                   // iconColor automatically comes from AppBarTheme
+                  // iconColor: appBarForegroundColor,
                   onSelected: (value) {
                     if (value == 'logout') {
-                      // The provider will notify listeners, and the logic above will handle the view change.
                       Provider.of<UserProvider>(context, listen: false)
                           .signOut();
                     } else if (value == 'settings') {
@@ -317,16 +377,13 @@ class _LandingPageState extends State<LandingPage> {
                 )
               else
                 OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor:
-                        Theme.of(context).appBarTheme.foregroundColor,
-                    side: BorderSide(
-                        color:
-                            Theme.of(context).appBarTheme.foregroundColor ??
-                                Theme.of(context).colorScheme.onPrimary),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
-                  ),
+                   // Style automatically comes from AppBarTheme
+                  // style: OutlinedButton.styleFrom(
+                  //   foregroundColor: appBarForegroundColor,
+                  //   side: BorderSide(color: appBarForegroundColor),
+                  //   shape: RoundedRectangleBorder(
+                  //       borderRadius: BorderRadius.circular(18)),
+                  // ),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -338,6 +395,8 @@ class _LandingPageState extends State<LandingPage> {
                 ),
               const SizedBox(width: 14),
               IconButton(
+                 // color automatically comes from AppBarTheme
+                // color: appBarForegroundColor,
                 tooltip: "Toggle dark mode",
                 icon: Icon(
                   widget.themeMode == ThemeMode.dark
@@ -359,7 +418,9 @@ class _LandingPageState extends State<LandingPage> {
                   ),
                   child: Text('Menu',
                       style:
-                          Theme.of(context).primaryTextTheme.headlineMedium),
+                          Theme.of(context).primaryTextTheme.headlineMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimary // Ensure text is visible
+                          )),
                 ),
                 if (userModel != null) ...[
                   ListTile(
@@ -534,19 +595,21 @@ class _LandingPageState extends State<LandingPage> {
         content = const MyCalendarPage();
         break;
     }
+    // Updated container styling to better match the branding branch example
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(16.0), // Reduced padding slightly
           child: Container(
-            padding: const EdgeInsets.all(16.0),
+             padding: const EdgeInsets.all(16.0), // Keep internal padding
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(12), // Slightly smaller radius
+               // Use surfaceVariant for a subtle background difference
+              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
               border: Border.all(
-                color: Theme.of(context).dividerColor.withOpacity(0.15),
+                color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.2), // Softer border
               ),
-              color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
             ),
             child: content,
           ),
@@ -590,6 +653,10 @@ class _SportsListColumnState extends State<SportsListColumn> {
     setState(() {
       _selectedSport = sportName;
       _teamsFuture = _apiService.getTeamsForSport(sportName);
+      // Reset team selection when sport changes
+      _selectedTeam = null;
+      _teamFixturesFuture = null;
+      _standingsFuture = null;
     });
   }
 
@@ -610,8 +677,14 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return [];
         }
       });
+      // Reset tab index when a new team is selected
+      _selectedTabIndex = 0;
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
     });
   }
+
 
   void _onBackToTeams() {
     setState(() {
@@ -692,16 +765,29 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: Text('No sports found.'));
 
         final sports = snapshot.data!;
-        return ListView.builder(
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 200, // Adjust size as needed
+            childAspectRatio: 2.5, // Adjust aspect ratio for button shape
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
           itemCount: sports.length,
           itemBuilder: (context, index) {
             final sport = sports[index];
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              child: ListTile(
-                leading: Text(sport.icon, style: const TextStyle(fontSize: 32)),
-                title: Text(sport.name, style: const TextStyle(fontSize: 18)),
-                onTap: () => _onSportSelected(sport.name),
+            return ElevatedButton.icon(
+              icon: Text(sport.icon, style: const TextStyle(fontSize: 24)), // Larger icon
+              label: Text(sport.name, textAlign: TextAlign.center),
+              onPressed: () => _onSportSelected(sport.name),
+              style: ElevatedButton.styleFrom(
+                 // Use secondary container for background
+                backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                 // Use onSecondaryContainer for text/icon
+                foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(8), // Adjust padding
               ),
             );
           },
@@ -709,6 +795,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
       },
     );
   }
+
 
   Widget _buildTeamsList() {
     return FutureBuilder<List<String>>(
@@ -723,16 +810,30 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: Text('No teams found.'));
 
         final teams = snapshot.data!;
-        return ListView.builder(
+        // Using GridView for teams as well
+         return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 250, // Slightly larger for team names
+            childAspectRatio: 3.5, // Adjust aspect ratio
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
           itemCount: teams.length,
           itemBuilder: (context, index) {
             final teamName = teams[index];
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: ElevatedButton(
-                onPressed: () => _onTeamSelected(teamName, _selectedSport!),
-                child: Text(teamName),
+             return ElevatedButton(
+              onPressed: () => _onTeamSelected(teamName, _selectedSport!),
+              style: ElevatedButton.styleFrom(
+                 // Use tertiary container for team buttons
+                backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+                 // Use onTertiaryContainer for text
+                foregroundColor: Theme.of(context).colorScheme.onTertiaryContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjust padding
               ),
+              child: Text(teamName, textAlign: TextAlign.center),
             );
           },
         );
@@ -767,34 +868,34 @@ class _SportsListColumnState extends State<SportsListColumn> {
                   color: isFollowed ? Colors.amber : null),
               label: Text(isFollowed ? 'Following' : 'Follow'),
               style: ElevatedButton.styleFrom(
+                 // Style the follow button based on state
                 backgroundColor: isFollowed
                     ? Theme.of(context).colorScheme.primaryContainer
-                    : null,
+                    : Theme.of(context).colorScheme.surfaceVariant,
+                foregroundColor: isFollowed
+                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
         const SizedBox(height: 16),
-        ToggleButtons(
-          isSelected: [_selectedTabIndex == 0, _selectedTabIndex == 1],
-          onPressed: (index) {
-            setState(() {
-              _selectedTabIndex = index;
+        // Using SegmentedButton for tabs - a Material 3 component
+        SegmentedButton<int>(
+          segments: const <ButtonSegment<int>>[
+             ButtonSegment<int>(value: 0, label: Text('Fixtures'), icon: Icon(Icons.list)),
+             ButtonSegment<int>(value: 1, label: Text('Standings'), icon: Icon(Icons.leaderboard)),
+          ],
+          selected: <int>{_selectedTabIndex},
+          onSelectionChanged: (Set<int> newSelection) {
+             setState(() {
+              _selectedTabIndex = newSelection.first;
               _pageController.animateToPage(
-                index,
+                _selectedTabIndex,
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
               );
             });
           },
-          borderRadius: BorderRadius.circular(8),
-          children: const [
-            Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text('Fixtures & Results')),
-            Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text('Standings')),
-          ],
         ),
         const SizedBox(height: 16),
         Expanded(
@@ -824,6 +925,23 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: Text('No fixtures found.'));
 
         final fixtures = snapshot.data!;
+         // Sort fixtures: upcoming ascending, results descending
+        fixtures.sort((a, b) {
+          try {
+            final dateA = DateTime.parse(a.dateTime);
+            final dateB = DateTime.parse(b.dateTime);
+            final bool isFinishedA = (a.homeScore != null && a.homeScore!.isNotEmpty) || (a.awayScore != null && a.awayScore!.isNotEmpty) || a.resultStatus != 0;
+            final bool isFinishedB = (b.homeScore != null && b.homeScore!.isNotEmpty) || (b.awayScore != null && b.awayScore!.isNotEmpty) || b.resultStatus != 0;
+
+            if (isFinishedA && !isFinishedB) return 1; // Finished games come after upcoming
+            if (!isFinishedA && isFinishedB) return -1; // Upcoming games come before finished
+            if (isFinishedA && isFinishedB) return dateB.compareTo(dateA); // Sort finished descending
+            return dateA.compareTo(dateB); // Sort upcoming ascending
+          } catch (e) {
+            return 0; // Keep original order if dates are invalid
+          }
+        });
+
         return ListView.builder(
           itemCount: fixtures.length,
           itemBuilder: (context, index) =>
@@ -832,6 +950,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
       },
     );
   }
+
 
   Widget _buildStandingsContent() {
     return FutureBuilder<List<StandingsTable>>(
@@ -846,33 +965,51 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: Text('No standings available.'));
 
         final tables = snapshot.data!;
+        // Display standings in Cards
         return ListView.builder(
           itemCount: tables.length,
           itemBuilder: (context, index) {
             final table = tables[index];
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Team')),
-                    DataColumn(label: Text('P')),
-                    DataColumn(label: Text('W')),
-                    DataColumn(label: Text('L')),
-                    DataColumn(label: Text('D')),
-                    DataColumn(label: Text('Pts')),
+              child: Padding(
+                 padding: const EdgeInsets.all(8.0), // Add padding inside card
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     if (table.sectionName != 'Standings') // Show section name if available
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Text(table.sectionName, style: Theme.of(context).textTheme.titleMedium),
+                      ),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        // Make columns more compact
+                        columnSpacing: 12.0,
+                        headingTextStyle: Theme.of(context).textTheme.labelSmall,
+                        dataTextStyle: Theme.of(context).textTheme.bodyMedium,
+                        columns: const [
+                          DataColumn(label: Text('Team')),
+                          DataColumn(label: Text('P'), numeric: true),
+                          DataColumn(label: Text('W'), numeric: true),
+                          DataColumn(label: Text('L'), numeric: true),
+                          DataColumn(label: Text('D'), numeric: true),
+                          DataColumn(label: Text('Pts'), numeric: true),
+                        ],
+                        rows: table.standings
+                            .map((s) => DataRow(cells: [
+                                  DataCell(Text(s.teamName)),
+                                  DataCell(Text(s.played.toString())),
+                                  DataCell(Text(s.win.toString())),
+                                  DataCell(Text(s.loss.toString())),
+                                  DataCell(Text(s.draw.toString())),
+                                  DataCell(Text(s.total.toString())),
+                                ]))
+                            .toList(),
+                      ),
+                    ),
                   ],
-                  rows: table.standings
-                      .map((s) => DataRow(cells: [
-                            DataCell(Text(s.teamName)),
-                            DataCell(Text(s.played.toString())),
-                            DataCell(Text(s.win.toString())),
-                            DataCell(Text(s.loss.toString())),
-                            DataCell(Text(s.draw.toString())),
-                            DataCell(Text(s.total.toString())),
-                          ]))
-                      .toList(),
                 ),
               ),
             );
@@ -882,6 +1019,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
     );
   }
 }
+
 
 class _TeamDisplay extends StatelessWidget {
   final String school;
@@ -938,10 +1076,13 @@ class _FixtureResultCard extends StatelessWidget {
 
     final homeScore = fixture.homeScore ?? '';
     final awayScore = fixture.awayScore ?? '';
+    // Use primary color for scores
     final scoreColor = Theme.of(context).colorScheme.primary;
     final bool isCricket = fixture.source == DataSource.playHQ;
 
     return Card(
+      // Use surfaceVariant for card background
+      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -949,9 +1090,11 @@ class _FixtureResultCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              DateFormat('EEE, d MMM yy - hh:mm a')
+              // Format date more clearly
+              DateFormat('EEE, d MMM yy • hh:mm a')
                   .format(DateTime.parse(fixture.dateTime)),
-              style: Theme.of(context).textTheme.bodySmall,
+               // Use label small style for date
+              style: Theme.of(context).textTheme.labelSmall,
             ),
             const SizedBox(height: 12),
             Row(
@@ -976,14 +1119,14 @@ class _FixtureResultCard extends StatelessWidget {
                               .headlineSmall
                               ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: scoreColor),
+                                  color: scoreColor), // Apply score color
                         )
                       : Text(
                           'vs',
                           style: Theme.of(context)
                               .textTheme
                               .titleLarge
-                              ?.copyWith(color: Colors.grey),
+                              ?.copyWith(color: Theme.of(context).colorScheme.outline), // Use outline color for 'vs'
                         ),
                 ),
                 Expanded(
@@ -1000,12 +1143,14 @@ class _FixtureResultCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                 // Use outline color for location icon
+                Icon(Icons.location_on, size: 14, color: Theme.of(context).colorScheme.outline),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
                     fixture.venue,
-                    style: Theme.of(context).textTheme.bodySmall,
+                     // Use label small for venue
+                    style: Theme.of(context).textTheme.labelSmall,
                     textAlign: TextAlign.center,
                   ),
                 ),
