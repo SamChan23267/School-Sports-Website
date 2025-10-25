@@ -79,13 +79,13 @@ class _MyAppState extends State<MyApp> {
             seedColor: kShcDarkBlue, brightness: Brightness.light),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(
-           // Explicitly set a dark foreground for the light theme's AppBar
+          // Explicitly set a dark foreground for the light theme's AppBar
           foregroundColor: Colors.black87, // Use a dark color for text/icons
-           // Use the primary color generated from the seed for the background
+          // Use the primary color generated from the seed for the background
           // backgroundColor: kShcDarkBlue, // Optional: Force specific background
-           // Ensure title text also uses the foreground color
+          // Ensure title text also uses the foreground color
           titleTextStyle: TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.w500),
-           // Ensure icons also use the foreground color
+          // Ensure icons also use the foreground color
           iconTheme: IconThemeData(color: Colors.black87),
           actionsIconTheme: IconThemeData(color: Colors.black87),
         ),
@@ -96,10 +96,10 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
         appBarTheme: const AppBarTheme(
           // Ensure AppBar text/icons are white against the dark theme's AppBar background
-           foregroundColor: Colors.white,
-           // Ensure title text also uses the foreground color
-           titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w500),
-            // Ensure icons also use the foreground color
+          foregroundColor: Colors.white,
+          // Ensure title text also uses the foreground color
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w500),
+           // Ensure icons also use the foreground color
           iconTheme: IconThemeData(color: Colors.white),
           actionsIconTheme: IconThemeData(color: Colors.white),
         ),
@@ -130,18 +130,29 @@ class _MyAppState extends State<MyApp> {
 class _BrandingStripe extends StatelessWidget implements PreferredSizeWidget {
   final double height;
 
-  const _BrandingStripe({this.height = 4.0}); // Adjust height as needed
+  const _BrandingStripe({this.height = 8.0}); // Updated height to 8.0
 
   @override
   Widget build(BuildContext context) {
-    // Removed the Material wrapper - let it draw directly below AppBar content
-    return SizedBox(
+    // Calculate the left padding as a percentage of screen width, similar to the website's 8%
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double leftPadding = screenWidth * 0.08;
+
+    // Implemented the specific layout provided by the user
+    return Container(
       height: height,
-      child: const Row(
+      color: kShcDarkBlue, // Dark blue background of the line
+      padding: EdgeInsets.only(left: leftPadding),
+      child: Row(
         children: [
-          Expanded(child: ColoredBox(color: kShcRed)),
-          Expanded(child: ColoredBox(color: kShcDarkBlue)),
-          Expanded(child: ColoredBox(color: kShcLightBlue)),
+          Container(
+            width: 40,
+            color: kShcRed, // Red part
+          ),
+          Container(
+            width: 106,
+            color: kShcLightBlue, // Light blue part
+          ),
         ],
       ),
     );
@@ -295,119 +306,119 @@ class _LandingPageState extends State<LandingPage> {
 
         return Scaffold(
           appBar: AppBar(
-             // foregroundColor is now handled by AppBarTheme
-            title: Text(_getCurrentViewTitle(currentView)),
-            // --- Add the branding stripe below the AppBar ---
-            bottom: const _BrandingStripe(),
-            // -----------------------------------------------
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const ContactUsPage()),
-                  );
-                },
-                // Style automatically comes from AppBarTheme's foregroundColor
-                // style: TextButton.styleFrom(
-                //   foregroundColor: appBarForegroundColor,
-                // ),
-                child: const Text('Contact Us'),
-              ),
-              const SizedBox(width: 8),
-              if (userModel != null)
-                PopupMenuButton<String>(
-                   // iconColor automatically comes from AppBarTheme
-                  // iconColor: appBarForegroundColor,
-                  onSelected: (value) {
-                    if (value == 'logout') {
-                      Provider.of<UserProvider>(context, listen: false)
-                          .signOut();
-                    } else if (value == 'settings') {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => UserSettingsPage(
-                            themeMode: widget.themeMode,
-                            onToggleTheme: widget.onToggleTheme,
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                    PopupMenuItem<String>(
-                      enabled: false,
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundImage: NetworkImage(userModel.photoURL),
-                            radius: 15,
-                            child: userModel.photoURL.isEmpty
-                                ? const Icon(Icons.person)
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(userModel.displayName),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem<String>(
-                      value: 'settings',
-                      child: Text('Settings'),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'logout',
-                      child: Text('Logout'),
-                    ),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: CircleAvatar(
-                      backgroundImage: NetworkImage(userModel.photoURL),
-                      radius: 18,
-                      child: userModel.photoURL.isEmpty
-                          ? const Icon(Icons.person)
-                          : null,
-                    ),
-                  ),
-                )
-              else
-                OutlinedButton(
-                   // Style automatically comes from AppBarTheme
-                  // style: OutlinedButton.styleFrom(
-                  //   foregroundColor: appBarForegroundColor,
-                  //   side: BorderSide(color: appBarForegroundColor),
-                  //   shape: RoundedRectangleBorder(
-                  //       borderRadius: BorderRadius.circular(18)),
-                  // ),
+              // foregroundColor is now handled by AppBarTheme
+              title: Text(_getCurrentViewTitle(currentView)),
+              // --- Add the branding stripe below the AppBar ---
+              bottom: const _BrandingStripe(), // Using the updated widget
+              // -----------------------------------------------
+              actions: [
+                TextButton(
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const LoginPage()),
+                      MaterialPageRoute(
+                          builder: (context) => const ContactUsPage()),
                     );
                   },
-                  child: const Text('Login',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  // Style automatically comes from AppBarTheme's foregroundColor
+                  // style: TextButton.styleFrom(
+                  //   foregroundColor: appBarForegroundColor,
+                  // ),
+                  child: const Text('Contact Us'),
                 ),
-              const SizedBox(width: 14),
-              IconButton(
-                 // color automatically comes from AppBarTheme
-                // color: appBarForegroundColor,
-                tooltip: "Toggle dark mode",
-                icon: Icon(
-                  widget.themeMode == ThemeMode.dark
-                      ? Icons.nightlight_round
-                      : Icons.wb_sunny,
+                const SizedBox(width: 8),
+                if (userModel != null)
+                  PopupMenuButton<String>(
+                      // iconColor automatically comes from AppBarTheme
+                      // iconColor: appBarForegroundColor,
+                      onSelected: (value) {
+                        if (value == 'logout') {
+                          Provider.of<UserProvider>(context, listen: false)
+                              .signOut();
+                        } else if (value == 'settings') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => UserSettingsPage(
+                                themeMode: widget.themeMode,
+                                onToggleTheme: widget.onToggleTheme,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          enabled: false,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundImage: NetworkImage(userModel.photoURL),
+                                radius: 15,
+                                child: userModel.photoURL.isEmpty
+                                    ? const Icon(Icons.person)
+                                    : null,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(userModel.displayName),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem<String>(
+                          value: 'settings',
+                          child: Text('Settings'),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'logout',
+                          child: Text('Logout'),
+                        ),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: CircleAvatar(
+                          backgroundImage: NetworkImage(userModel.photoURL),
+                          radius: 18,
+                          child: userModel.photoURL.isEmpty
+                              ? const Icon(Icons.person)
+                              : null,
+                        ),
+                      ),
+                    )
+                else
+                  OutlinedButton(
+                      // Style automatically comes from AppBarTheme
+                      // style: OutlinedButton.styleFrom(
+                      //   foregroundColor: appBarForegroundColor,
+                      //   side: BorderSide(color: appBarForegroundColor),
+                      //   shape: RoundedRectangleBorder(
+                      //       borderRadius: BorderRadius.circular(18)),
+                      // ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const LoginPage()),
+                        );
+                      },
+                      child: const Text('Login',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                const SizedBox(width: 14),
+                IconButton(
+                  // color automatically comes from AppBarTheme
+                  // color: appBarForegroundColor,
+                  tooltip: "Toggle dark mode",
+                  icon: Icon(
+                    widget.themeMode == ThemeMode.dark
+                        ? Icons.nightlight_round
+                        : Icons.wb_sunny,
+                  ),
+                  onPressed: widget.onToggleTheme,
                 ),
-                onPressed: widget.onToggleTheme,
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
+                const SizedBox(width: 16),
+              ],
+            ),
           drawer: Drawer(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -780,9 +791,9 @@ class _SportsListColumnState extends State<SportsListColumn> {
               label: Text(sport.name, textAlign: TextAlign.center),
               onPressed: () => _onSportSelected(sport.name),
               style: ElevatedButton.styleFrom(
-                 // Use secondary container for background
+                // Use secondary container for background
                 backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                 // Use onSecondaryContainer for text/icon
+                // Use onSecondaryContainer for text/icon
                 foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -821,12 +832,12 @@ class _SportsListColumnState extends State<SportsListColumn> {
           itemCount: teams.length,
           itemBuilder: (context, index) {
             final teamName = teams[index];
-             return ElevatedButton(
+            return ElevatedButton(
               onPressed: () => _onTeamSelected(teamName, _selectedSport!),
               style: ElevatedButton.styleFrom(
-                 // Use tertiary container for team buttons
+                // Use tertiary container for team buttons
                 backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                 // Use onTertiaryContainer for text
+                // Use onTertiaryContainer for text
                 foregroundColor: Theme.of(context).colorScheme.onTertiaryContainer,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -868,7 +879,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
                   color: isFollowed ? Colors.amber : null),
               label: Text(isFollowed ? 'Following' : 'Follow'),
               style: ElevatedButton.styleFrom(
-                 // Style the follow button based on state
+                // Style the follow button based on state
                 backgroundColor: isFollowed
                     ? Theme.of(context).colorScheme.primaryContainer
                     : Theme.of(context).colorScheme.surfaceVariant,
@@ -882,12 +893,12 @@ class _SportsListColumnState extends State<SportsListColumn> {
         // Using SegmentedButton for tabs - a Material 3 component
         SegmentedButton<int>(
           segments: const <ButtonSegment<int>>[
-             ButtonSegment<int>(value: 0, label: Text('Fixtures'), icon: Icon(Icons.list)),
-             ButtonSegment<int>(value: 1, label: Text('Standings'), icon: Icon(Icons.leaderboard)),
+              ButtonSegment<int>(value: 0, label: Text('Fixtures'), icon: Icon(Icons.list)),
+              ButtonSegment<int>(value: 1, label: Text('Standings'), icon: Icon(Icons.leaderboard)),
           ],
           selected: <int>{_selectedTabIndex},
           onSelectionChanged: (Set<int> newSelection) {
-             setState(() {
+            setState(() {
               _selectedTabIndex = newSelection.first;
               _pageController.animateToPage(
                 _selectedTabIndex,
@@ -925,7 +936,7 @@ class _SportsListColumnState extends State<SportsListColumn> {
           return const Center(child: Text('No fixtures found.'));
 
         final fixtures = snapshot.data!;
-         // Sort fixtures: upcoming ascending, results descending
+        // Sort fixtures: upcoming ascending, results descending
         fixtures.sort((a, b) {
           try {
             final dateA = DateTime.parse(a.dateTime);
@@ -973,11 +984,11 @@ class _SportsListColumnState extends State<SportsListColumn> {
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
               child: Padding(
-                 padding: const EdgeInsets.all(8.0), // Add padding inside card
+                  padding: const EdgeInsets.all(8.0), // Add padding inside card
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                     if (table.sectionName != 'Standings') // Show section name if available
+                      if (table.sectionName != 'Standings') // Show section name if available
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Text(table.sectionName, style: Theme.of(context).textTheme.titleMedium),
