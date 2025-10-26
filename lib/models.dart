@@ -337,9 +337,18 @@ class Standing {
     int getStat(String key) {
       final index = headers.indexWhere((h) => h['key'] == key);
       if (index != -1 && json['values'] != null && index < (json['values'] as List).length) {
-        return (json['values'][index] as num?)?.toInt() ?? 0;
+        // Safely parses the value, whether it's int, double, or String.
+        return num.tryParse(json['values'][index].toString())?.toInt() ?? 0;
       }
       return 0;
+    }
+    
+    double getNetRunRate() {
+      final index = headers.indexWhere((h) => h['key'] == 'netRunRate');
+      if (index != -1 && json['values'] != null && index < (json['values'] as List).length) {
+        return num.tryParse(json['values'][index].toString())?.toDouble() ?? 0.0;
+      }
+      return 0.0;
     }
 
     return Standing(
@@ -347,14 +356,15 @@ class Standing {
       played: getStat('played'),
       win: getStat('won'),
       loss: getStat('lost'),
-      draw: getStat('drawn'),
+      draw: getStat('ties'), 
       byes: getStat('byes'),
-      bonus: getStat('bonusPoints'), // Assuming a key, might need adjustment
-      pointsFor: getStat('for'),
-      pointsAgainst: getStat('against'),
-      differential: getStat('goalDifference'), // Or similar key
-      total: getStat('points'),
-      position: getStat('ranking'),
+      bonus: getStat('bonusPoints'),
+      pointsFor: getStat('runsFor'),  
+      pointsAgainst: getStat('runsAgainst'),
+      differential: getNetRunRate().round(), 
+      total: getStat('competitionPoints'),
+      position: getStat('ranking'), 
     );
   }
 }
+

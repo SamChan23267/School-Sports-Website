@@ -1001,20 +1001,34 @@ class _SportsListColumnState extends State<SportsListColumn> {
                         headingTextStyle: Theme.of(context).textTheme.labelSmall,
                         dataTextStyle: Theme.of(context).textTheme.bodyMedium,
                         columns: const [
+                          // Previous columns...
+                          DataColumn(label: Text('Pos'), numeric: true),
                           DataColumn(label: Text('Team')),
                           DataColumn(label: Text('P'), numeric: true),
                           DataColumn(label: Text('W'), numeric: true),
                           DataColumn(label: Text('L'), numeric: true),
                           DataColumn(label: Text('D'), numeric: true),
+                          // --- FIX: Add GF, GA, GD Columns ---
+                          DataColumn(label: Text('GF'), numeric: true),
+                          DataColumn(label: Text('GA'), numeric: true),
+                          DataColumn(label: Text('GD'), numeric: true),
+                          // --- END FIX ---
                           DataColumn(label: Text('Pts'), numeric: true),
                         ],
                         rows: table.standings
                             .map((s) => DataRow(cells: [
+                                  // Previous cells...
+                                  DataCell(Text(s.position.toString())),
                                   DataCell(Text(s.teamName)),
                                   DataCell(Text(s.played.toString())),
                                   DataCell(Text(s.win.toString())),
                                   DataCell(Text(s.loss.toString())),
                                   DataCell(Text(s.draw.toString())),
+                                  // --- FIX: Add GF, GA, GD Cells ---
+                                  DataCell(Text(s.pointsFor.toString())),
+                                  DataCell(Text(s.pointsAgainst.toString())),
+                                  DataCell(Text(s.differential.toString())),
+                                  // --- END FIX ---
                                   DataCell(Text(s.total.toString())),
                                 ]))
                             .toList(),
@@ -1173,4 +1187,3 @@ class _FixtureResultCard extends StatelessWidget {
     );
   }
 }
-
